@@ -400,6 +400,10 @@ python --version
 
 ## 12. 安装依赖
 
+### 12.1 普通路线
+
+如果你不是 Blackwell 平台，可以先用：
+
 ```bash
 cd ~/work/Teaching-LLM-replicate-AWS
 pip install -U pip setuptools wheel ninja packaging
@@ -413,6 +417,39 @@ export CUDA_HOME=/usr/local/cuda
 export MAX_JOBS=4
 pip install flash-attn==2.7.4.post1 --no-build-isolation
 ```
+
+### 12.2 Blackwell 路线
+
+如果平台明确提示：
+
+- Blackwell 强制需要 CUDA 12.8
+- PyTorch 至少要 2.7
+
+那么不要直接一把 `pip install -r requirements.txt`。
+
+改用分步安装：
+
+```bash
+cd ~/work/Teaching-LLM-replicate-AWS
+pip install -U pip setuptools wheel ninja packaging
+pip install torch==2.7.1 --index-url https://download.pytorch.org/whl/cu128
+pip install vllm==0.8.3 --extra-index-url https://download.pytorch.org/whl/cu128
+pip install flash-attn==2.7.4.post1 --no-build-isolation
+pip install -r requirements.txt --no-deps
+```
+
+这样做的目的，是先把：
+
+- `torch`
+- `vllm`
+- `flash-attn`
+
+这三个最容易和 Blackwell/CUDA 12.8 纠缠的核心包固定好，再补其余依赖。
+
+注意：
+
+- 这条 Blackwell 路线是“部署适配方案”，不是论文作者原始环境
+- 如果 `vllm==0.8.3` 或 `flash-attn==2.7.4.post1` 在 Blackwell 上仍然报兼容错误，我们再针对那两个包升级，而不是先怀疑整套代码
 
 ---
 
