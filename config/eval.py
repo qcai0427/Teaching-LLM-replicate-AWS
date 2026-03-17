@@ -49,4 +49,7 @@ class EvalConfig:
 
     recompute_initial_attempts: bool = True
 
+    export_conversations_path: str | None = None
+    export_metrics_path: str | None = None
+
     seed: int = 42

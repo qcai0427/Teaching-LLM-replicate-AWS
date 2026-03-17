@@ -70,7 +70,7 @@ def main(cfg: RLModelTrainingConfig):
     torch_dtype = torch.bfloat16
     model_kwargs = dict(
         trust_remote_code=True,
-        attn_implementation="flash_attention_2",
+        attn_implementation=model_config.attn_implementation,
         torch_dtype=torch_dtype,
         use_cache=False if train_config.gradient_checkpointing else True,
     )

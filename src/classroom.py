@@ -26,8 +26,6 @@ from config.train_rl_model import (
 )
 from src.vllm.data_parallel_vllm import ParallelvLLMInference, InferenceTask
 from src.utils.utils import check_equal, extract_answer
-from src.inference_providers.open_router_inference import OpenRouterInference
-from src.inference_providers.gemini_api_inference import GeminiInference
 import logging
 
 logger = logging.getLogger(__name__)
@@ -611,10 +609,14 @@ class Classroom:
         self.generation_cfg = generation_cfg
 
         if self.teacher_model_cfg.use_openrouter:
+            from src.inference_providers.open_router_inference import OpenRouterInference
+
             self.teacher_model = OpenRouterInference(
                 self.teacher_model_cfg.model_name_or_path
             )
         elif self.teacher_model_cfg.use_gemini:
+            from src.inference_providers.gemini_api_inference import GeminiInference
+
             self.teacher_model = GeminiInference(
                 self.teacher_model_cfg.model_name_or_path
             )
@@ -640,10 +642,14 @@ class Classroom:
         self.teacher_model.sleep()
 
         if self.student_model_cfg.use_openrouter:
+            from src.inference_providers.open_router_inference import OpenRouterInference
+
             self.student_model = OpenRouterInference(
                 self.student_model_cfg.model_name_or_path
             )
         elif self.student_model_cfg.use_gemini:
+            from src.inference_providers.gemini_api_inference import GeminiInference
+
             self.student_model = GeminiInference(
                 self.student_model_cfg.model_name_or_path
             )
@@ -668,10 +674,14 @@ class Classroom:
         self.student_model.sleep()
 
         if self.judge_model_cfg.use_openrouter:
+            from src.inference_providers.open_router_inference import OpenRouterInference
+
             self.judge_model = OpenRouterInference(
                 self.judge_model_cfg.model_name_or_path
             )
         elif self.judge_model_cfg.use_gemini:
+            from src.inference_providers.gemini_api_inference import GeminiInference
+
             self.judge_model = GeminiInference(self.judge_model_cfg.model_name_or_path)
         else:
             self.judge_model = ParallelvLLMInference(
@@ -850,89 +860,97 @@ class Classroom:
         # Only for eval we compute how good the model was initially.
         if compute_initial_attempt:
             logger.info(("=" * 10) + "Computing initial attempts" + ("=" * 10))
-            messages = [
-                conversation.get_student_no_tutor_attempt()
-                for conversation in conversations
-            ]
-            responses = self.student_model.run_batch(
-                messages, self.sampling_params_student_solution
-            )
-            for conversation, response in zip(conversations, responses):
-                conversation.add_initial_attempts(
-                    [output.text for output in response.outputs]
+            with tqdm(total=2, desc="Initial attempts", leave=True) as initial_pbar:
+                messages = [
+                    conversation.get_student_no_tutor_attempt()
+                    for conversation in conversations
+                ]
+                responses = self.student_model.run_batch(
+                    messages, self.sampling_params_student_solution
                 )
+                for conversation, response in zip(conversations, responses):
+                    conversation.add_initial_attempts(
+                        [output.text for output in response.outputs]
+                    )
+                initial_pbar.update(1)
 
-            prompts_for_rewards = [
-                conversation.get_initial_solutions_for_reward()
-                for conversation in conversations
-            ]
-            lengths = [len(prompts) for prompts in prompts_for_rewards]
+                prompts_for_rewards = [
+                    conversation.get_initial_solutions_for_reward()
+                    for conversation in conversations
+                ]
+                lengths = [len(prompts) for prompts in prompts_for_rewards]
 
-            all_prompts = [
-                prompt for prompts in prompts_for_rewards for prompt in prompts
-            ]
-            all_answers = []
-            for conversation in conversations:
-                all_answers.extend(
-                    [conversation.answer] * len(conversation.initial_attempts)
-                )
+                all_prompts = [
+                    prompt for prompts in prompts_for_rewards for prompt in prompts
+                ]
+                all_answers = []
+                for conversation in conversations:
+                    all_answers.extend(
+                        [conversation.answer] * len(conversation.initial_attempts)
+                    )
 
-            rewards = self._compute_rewards_from_prompts(all_prompts, all_answers)
+                rewards = self._compute_rewards_from_prompts(all_prompts, all_answers)
 
-            for conv in conversations:
-                curr_len = lengths.pop(0)
-                conv_rewards = rewards[:curr_len]
-                conv.add_initial_rewards(conv_rewards)
-                rewards = rewards[curr_len:]
+                for conv in conversations:
+                    curr_len = lengths.pop(0)
+                    conv_rewards = rewards[:curr_len]
+                    conv.add_initial_rewards(conv_rewards)
+                    rewards = rewards[curr_len:]
+                initial_pbar.update(1)
 
         round_counter = 1
 
         # We now alternate between teacher and student turns until the conversation is not in the conversation student/teacher turn state
-        while any(
-            [
-                conversation.state
-                in [ConversationState.TEACHER_TURN, ConversationState.STUDENT_TURN]
-                for conversation in conversations
-            ]
-        ):
-            for state_to_process in [
-                ConversationState.TEACHER_TURN,
-                ConversationState.STUDENT_TURN,
-            ]:
-                logger.info(
-                    ("=" * 10)
-                    + f"Executing turn {round_counter}: {'Teacher' if state_to_process == ConversationState.TEACHER_TURN else 'Student'}"
-                    + ("=" * 10)
-                )
-
-                start_time = time.time()
-                # We get all conversations that are in the state_to_process state
-                conversations_to_process = [
-                    conversation
+        with tqdm(
+            total=self.generation_cfg.max_turns + 1,
+            desc="Dialogue turns",
+            leave=True,
+        ) as dialogue_pbar:
+            while any(
+                [
+                    conversation.state
+                    in [ConversationState.TEACHER_TURN, ConversationState.STUDENT_TURN]
                     for conversation in conversations
-                    if conversation.state == state_to_process
                 ]
-                if len(conversations_to_process) == 0:
-                    continue
-
-                # We get the messages from the conversations (not used further here since helper methods call get_conversation internally)
-                messages = [
-                    conversation.get_conversation()
-                    for conversation in conversations_to_process
-                ]
-
-                # We get the responses from the model using our helper functions.
-                if state_to_process == ConversationState.TEACHER_TURN:
-                    self.generate_next_teacher_utterances(
-                        conversations_to_process, meta
+            ):
+                for state_to_process in [
+                    ConversationState.TEACHER_TURN,
+                    ConversationState.STUDENT_TURN,
+                ]:
+                    logger.info(
+                        ("=" * 10)
+                        + f"Executing turn {round_counter}: {'Teacher' if state_to_process == ConversationState.TEACHER_TURN else 'Student'}"
+                        + ("=" * 10)
                     )
-                else:
-                    self.generate_next_student_utterances(conversations_to_process)
 
-                # Next round counter.
-                round_counter += 1
+                    start_time = time.time()
+                    conversations_to_process = [
+                        conversation
+                        for conversation in conversations
+                        if conversation.state == state_to_process
+                    ]
+                    if len(conversations_to_process) == 0:
+                        continue
 
-                logger.info(f"Took {time.time() - start_time} seconds.")
+                    dialogue_pbar.set_postfix(
+                        role=(
+                            "teacher"
+                            if state_to_process == ConversationState.TEACHER_TURN
+                            else "student"
+                        ),
+                        active=len(conversations_to_process),
+                    )
+
+                    if state_to_process == ConversationState.TEACHER_TURN:
+                        self.generate_next_teacher_utterances(
+                            conversations_to_process, meta
+                        )
+                    else:
+                        self.generate_next_student_utterances(conversations_to_process)
+
+                    dialogue_pbar.update(1)
+                    round_counter += 1
+                    logger.info(f"Took {time.time() - start_time} seconds.")
 
         # We can put both to sleep.
         self.teacher_model.sleep()
@@ -944,70 +962,70 @@ class Classroom:
 
         num_attempts_required = self.generation_cfg.number_judge_attempts
         max_rounds = 5
-        while any(
-            [
-                conversation.state == ConversationState.JUDGE_TURN
-                for conversation in conversations
-            ]
-        ):
-            logger.info(("=" * 15) + "Judges round" + ("=" * 15))
-            # Select conversations in judge turn.
-            conversations_to_process = [
-                conv
-                for conv in conversations
-                if conv.state == ConversationState.JUDGE_TURN
-            ]
+        with tqdm(
+            total=max(1, len(self.generation_cfg.judges_rules_prompts_paths)),
+            desc="Judge rules",
+            leave=True,
+        ) as judge_pbar:
+            while any(
+                [
+                    conversation.state == ConversationState.JUDGE_TURN
+                    for conversation in conversations
+                ]
+            ):
+                logger.info(("=" * 15) + "Judges round" + ("=" * 15))
+                conversations_to_process = [
+                    conv
+                    for conv in conversations
+                    if conv.state == ConversationState.JUDGE_TURN
+                ]
+                judge_pbar.set_postfix(active=len(conversations_to_process))
 
-            # Dictionary to collect valid JudgeResponse objects per conversation.
-            valid_responses = {conv: [] for conv in conversations_to_process}
+                valid_responses = {conv: [] for conv in conversations_to_process}
 
-            for _judge_round in range(max_rounds):
-                logger.info(
-                    ("=" * 10) + f"Judges inner round {_judge_round}" + ("=" * 10)
-                )
-                pending = []  # List of tuples: (conversation, message)
-                # For each conversation, schedule as many generations as are missing.
+                for _judge_round in range(max_rounds):
+                    logger.info(
+                        ("=" * 10) + f"Judges inner round {_judge_round}" + ("=" * 10)
+                    )
+                    pending = []
+                    for conv in conversations_to_process:
+                        missing = num_attempts_required - len(valid_responses[conv])
+                        if missing > 0:
+                            for _ in range(missing):
+                                pending.append((conv, conv.get_conversation()))
+
+                    if not pending:
+                        break
+                    logger.info("Number of pending judge responses:" + str(len(pending)))
+
+                    pending_messages = [msg for _, msg in pending]
+                    responses = self.judge_model.run_batch(
+                        pending_messages, self.sampling_params_judge
+                    )
+
+                    for (conv, _), response in zip(pending, responses):
+                        for output in response.outputs:
+                            try:
+                                out_text = output.text[
+                                    output.text.find("{") : output.text.rfind("}") + 1
+                                ].replace("\\", "")
+                                decision = JudgeResponse(
+                                    **json.loads(out_text, strict=False)
+                                )
+                                valid_responses[conv].append(decision)
+                            except Exception:
+                                continue
+
                 for conv in conversations_to_process:
-                    missing = num_attempts_required - len(valid_responses[conv])
-                    if missing > 0:
-                        for _ in range(missing):
-                            pending.append((conv, conv.get_conversation()))
-
-                if not pending:
-                    break  # All conversations have enough valid responses.
-                logger.info("Number of pending judge responses:" + str(len(pending)))
-
-                # Run a batch for all pending messages.
-                pending_messages = [msg for _, msg in pending]
-                responses = self.judge_model.run_batch(
-                    pending_messages, self.sampling_params_judge
-                )
-
-                # Map each response back to its conversation.
-                for (conv, _), response in zip(pending, responses):
-                    for output in response.outputs:
-                        try:
-                            # We only take stuff that is between { and }
-                            out_text = output.text[
-                                output.text.find("{") : output.text.rfind("}") + 1
-                            ].replace("\\", "")
-                            decision = JudgeResponse(
-                                **json.loads(out_text, strict=False)
-                            )
-                            valid_responses[conv].append(decision)
-                        except Exception as e:
-                            continue
-
-            # For any conversation still missing valid responses, add default decisions.
-            for conv in conversations_to_process:
-                while len(valid_responses[conv]) < num_attempts_required:
-                    logger.warning(
-                        "Judge decision ran out of attempts, adding default decision"
-                    )
-                    valid_responses[conv].append(
-                        JudgeResponse(reasoning="max turns exceeded", decision="OK")
-                    )
-                conv.add_judge_decisions(valid_responses[conv])
+                    while len(valid_responses[conv]) < num_attempts_required:
+                        logger.warning(
+                            "Judge decision ran out of attempts, adding default decision"
+                        )
+                        valid_responses[conv].append(
+                            JudgeResponse(reasoning="max turns exceeded", decision="OK")
+                        )
+                    conv.add_judge_decisions(valid_responses[conv])
+                judge_pbar.update(1)
 
         self.judge_model.sleep()
         logger.info(f"Took {time.time() - start_time} seconds.")
@@ -1025,15 +1043,21 @@ class Classroom:
         )
 
         if len(conversations_to_process) > 0:
-            messages = [
-                conversation.get_conversation()
-                for conversation in conversations_to_process
-            ]
-            responses = self.student_model.run_batch(
-                messages, self.sampling_params_student_solution
-            )
-            for conversation, response in zip(conversations_to_process, responses):
-                conversation.add_solutions([output.text for output in response.outputs])
+            with tqdm(
+                total=len(conversations_to_process),
+                desc="Student solutions",
+                leave=True,
+            ) as solution_pbar:
+                messages = [
+                    conversation.get_conversation()
+                    for conversation in conversations_to_process
+                ]
+                responses = self.student_model.run_batch(
+                    messages, self.sampling_params_student_solution
+                )
+                for conversation, response in zip(conversations_to_process, responses):
+                    conversation.add_solutions([output.text for output in response.outputs])
+                    solution_pbar.update(1)
 
         self.student_model.sleep()
         logger.info(f"Took {time.time() - start_time} seconds.")
@@ -1047,20 +1071,26 @@ class Classroom:
             if conv.state == ConversationState.REWARD_TURN
         ]
         if reward_convs:
-            all_prompts = []
-            all_answers = []
-            lengths = []
-            for conv in reward_convs:
-                prompts = conv.get_solutions_for_reward()
-                lengths.append(len(prompts))
-                all_prompts.extend(prompts)
-                all_answers.extend([conv.answer] * len(prompts))
-            rewards = self._compute_rewards_from_prompts(all_prompts, all_answers)
-            for conv in reward_convs:
-                curr_len = lengths.pop(0)
-                conv_rewards = rewards[:curr_len]
-                conv.add_rewards(conv_rewards)
-                rewards = rewards[curr_len:]
+            with tqdm(
+                total=len(reward_convs),
+                desc="Reward aggregation",
+                leave=True,
+            ) as reward_pbar:
+                all_prompts = []
+                all_answers = []
+                lengths = []
+                for conv in reward_convs:
+                    prompts = conv.get_solutions_for_reward()
+                    lengths.append(len(prompts))
+                    all_prompts.extend(prompts)
+                    all_answers.extend([conv.answer] * len(prompts))
+                rewards = self._compute_rewards_from_prompts(all_prompts, all_answers)
+                for conv in reward_convs:
+                    curr_len = lengths.pop(0)
+                    conv_rewards = rewards[:curr_len]
+                    conv.add_rewards(conv_rewards)
+                    rewards = rewards[curr_len:]
+                    reward_pbar.update(1)
 
         logger.info(f"Took {time.time() - start_time} seconds.")
         # Free memory

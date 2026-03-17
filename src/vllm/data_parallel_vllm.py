@@ -332,11 +332,17 @@ class ParallelvLLMInference:
         )
         import contextlib
 
-        destroy_model_parallel()
-        destroy_distributed_environment()
-        del llm.llm_engine.model_executor
-        del llm
-        with contextlib.suppress(AssertionError):
-            torch.distributed.destroy_process_group()
+        with contextlib.suppress(Exception):
+            destroy_model_parallel()
+        with contextlib.suppress(Exception):
+            destroy_distributed_environment()
+        with contextlib.suppress(Exception):
+            if hasattr(llm, "llm_engine") and hasattr(llm.llm_engine, "model_executor"):
+                del llm.llm_engine.model_executor
+        with contextlib.suppress(Exception):
+            del llm
+        with contextlib.suppress(Exception):
+            if torch.distributed.is_available() and torch.distributed.is_initialized():
+                torch.distributed.destroy_process_group()
         gc.collect()
         torch.cuda.empty_cache()

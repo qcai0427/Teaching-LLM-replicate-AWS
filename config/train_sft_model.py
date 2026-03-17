@@ -16,6 +16,7 @@ class LoraConfig:
 class ModelConfig:
     model_name_or_path: str = "Qwen/Qwen2.5-7B-Instruct"
     tokenizer_name_or_path: str = "Qwen/Qwen2.5-7B-Instruct"
+    attn_implementation: str = "flash_attention_2"
     max_length: int = 16384
     lora: LoraConfig = field(default_factory=LoraConfig)
 

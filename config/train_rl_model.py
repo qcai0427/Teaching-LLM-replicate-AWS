@@ -42,6 +42,7 @@ class TeacherModelConfig:
     model_name_or_path: str = "Qwen/Qwen2.5-7B-Instruct"
     use_openrouter: bool = False
     use_gemini: bool = False
+    attn_implementation: str = "flash_attention_2"
     vllm: ModelvLLMConfig = field(default_factory=ModelvLLMConfig)
     lora: LoraConfig = field(default_factory=LoraConfig)
 

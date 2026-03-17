@@ -1,0 +1,78 @@
+teacher_model:
+  model_name_or_path: checkpoints/7b-aws-dryrun/model
+  attn_implementation: flash_attention_2
+  use_openrouter: false
+  vllm:
+    temperature: 0.6
+    max_length: 4096
+    max_num_seqs: 64
+    gpu_memory_utilization: 0.30
+    number_of_gpus_per_instance: 4
+    max_number_of_instances: 1
+    load_and_unload: true
+    use_v0: true
+    enforce_eager: true
+
+student_model:
+  model_name_or_path: neuralmagic/Meta-Llama-3.1-8B-Instruct-FP8
+  vllm:
+    temperature: 0.6
+    max_length: 4096
+    max_num_seqs: 64
+    gpu_memory_utilization: 0.30
+    number_of_gpus_per_instance: 4
+    max_number_of_instances: 1
+    load_and_unload: true
+    use_v0: false
+
+judge_model:
+  model_name_or_path: Qwen/Qwen2.5-14B-Instruct-AWQ
+  vllm:
+    temperature: 0.2
+    max_length: 4096
+    max_num_seqs: 64
+    gpu_memory_utilization: 0.30
+    number_of_gpus_per_instance: 4
+    max_number_of_instances: 1
+    load_and_unload: true
+    use_v0: false
+    enforce_eager: true
+
+reward_model:
+  model_name_or_path: Answer
+
+dataset:
+  eval_datasets:
+    - name_or_path: rd211/Big-Math-RL-Verified-Filtered
+      split: test
+      ratio: 1.0
+  max_val_examples: 4
+
+logging:
+  wandb: false
+  wandb_project: eval
+  wandb_run_name: 7b-aws-dryrun
+  run_group: aws-dryrun
+  wandb_tags: ["7b", "aws", "dryrun"]
+
+generation:
+  forced_conversation_type: guided
+  max_turns: 4
+  max_tokens_in_conversation: 4096
+  max_tokens_per_turn: 256
+  max_tokens_per_student_attempt: 512
+  max_tokens_per_judge_attempt: 512
+  number_student_attempts: 2
+  number_judge_attempts: 1
+  ignore_rejected_judge: true
+  extra_penalty_for_rejected_judges: 1.0
+  use_thinking: false
+  force_thinking: false
+  tokenizer_to_use: Qwen/Qwen2.5-7B-Instruct
+
+num_samples_per_problem: 1
+score_using_pedagogical_reward: false
+recompute_initial_attempts: true
+export_conversations_path: reports/aws_dryrun_eval_conversations.json
+export_metrics_path: reports/aws_dryrun_eval_metrics.json
+
