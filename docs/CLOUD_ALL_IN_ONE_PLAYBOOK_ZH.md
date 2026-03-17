@@ -450,6 +450,12 @@ wandb login
 
 然后粘贴你的 W&B API key。
 
+建议：
+
+- 不要把 API key 写进仓库文件
+- 不要把 API key 写进公开文档
+- 不要把 API key 直接写进长期保存的 shell 历史
+
 ### 15.2 这个项目里怎么打开 wandb
 
 这个仓库的大部分训练配置默认已经是：
@@ -472,7 +478,20 @@ logging:
 
 训练就会自动往 W&B 记日志。
 
-### 15.3 如果你不想开
+### 15.3 什么时候必须开，什么时候可以不开
+
+建议你这样做：
+
+- dry run 训练：可以开
+- full run 训练：强烈建议开
+- 评测：默认可以不开
+
+原因：
+
+- 训练时 W&B 最有价值，能帮你确认 run 还活着
+- 评测时默认不开更安静，也能减少上传表格的麻烦
+
+### 15.4 如果你不想开
 
 可以在命令行里覆盖：
 
@@ -488,6 +507,36 @@ logging.wandb=false
   --config-name 7b_aws_dryrun \
   logging.wandb=false
 ```
+
+### 15.5 如果 W&B 出问题，会不会影响实验
+
+默认情况下：
+
+- 如果你已经登录成功，而且网络正常，W&B 只负责记录日志，不改变训练逻辑
+- 如果你担心 W&B 成为不稳定因素，可以直接把它关掉，训练本身仍然可以继续
+
+也就是说：
+
+- W&B 不是训练的核心依赖
+- 它更像是“监控面板”
+
+最保守的策略是：
+
+1. 先在便宜小机上单独测试一次 `wandb login`
+2. 正式大机上如果 W&B 正常，就开着
+3. 如果 W&B 报错或网络异常，就立刻改成 `logging.wandb=false`
+
+### 15.6 W&B 的最小自检
+
+在云机或便宜小机上执行：
+
+```bash
+pip install -U wandb
+wandb login
+wandb status
+```
+
+如果这三步都正常，再继续训练。
 
 ---
 
@@ -972,6 +1021,21 @@ ps -ef | grep -E "train_rl.py|vllm_server.py|uvicorn" | grep -v grep
 4. dry run
 5. dry run eval
 6. stop 实例
+
+### 如果你先租的是便宜小服务器
+
+那你只做这些，不要尝试 full run：
+
+1. SSH 登录
+2. clone 项目
+3. conda 环境创建
+4. `pip install -r requirements.txt`
+5. `huggingface-cli login`
+6. `wandb login`
+7. `wandb status`
+8. 可选：下载数据集
+
+便宜小机的目标是熟悉流程，不是验证 4 卡训练。
 
 ### 第三天
 
