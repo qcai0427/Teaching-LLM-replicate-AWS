@@ -1,0 +1,71 @@
+train:
+  number_of_problems_per_batch: 16
+  num_samples_per_problem: 8
+
+  learning_rate: 5e-7
+  beta: 0.001
+  mu: 2
+
+teacher_model:
+  model_name_or_path: Qwen/Qwen2.5-7B-Instruct
+  vllm:
+    temperature: 1.0
+    max_length: 12000
+    max_num_seqs: 512
+    gpu_memory_utilization: 0.325
+    number_of_gpus_per_instance: 4
+    max_number_of_instances: -1
+    load_and_unload: true
+    use_v0: true
+    enforce_eager: true
+
+student_model:
+  model_name_or_path: meta-llama/Llama-3.1-8B-Instruct
+  vllm:
+    temperature: 0.6
+    max_length: 12000
+    max_num_seqs: 512
+    gpu_memory_utilization: 0.325
+    number_of_gpus_per_instance: 4
+    max_number_of_instances: -1
+    use_v0: false
+    load_and_unload: true
+
+judge_model:
+  model_name_or_path: Qwen/Qwen2.5-14B-Instruct-AWQ
+  vllm:
+    temperature: 0.6
+    max_length: 12000
+    max_num_seqs: 512
+    gpu_memory_utilization: 0.325
+    number_of_gpus_per_instance: 4
+    max_number_of_instances: -1
+    load_and_unload: false
+    use_v0: false
+
+reward_model:
+  model_name_or_path: Answer
+
+huggingface:
+  name: <huggingface_name>
+  push_to_hub: false
+
+logging:
+  wandb: true
+  wandb_project: train-rl
+  wandb_run_name: Qwen2.5-7B-Instruct-HardLambda1.0-NoFP8
+  run_group: 7b
+  wandb_tags: ["7b", "nofp8"]
+  save_dir: checkpoints/7b-nofp8
+  save_steps: 10
+
+generation:
+  extra_penalty_for_rejected_judges: 1.0
+  ignore_rejected_judge: false
+  use_experimental_shared_memory: false
+
+  # Optional toggles:
+  # use_thinking: true
+  # force_thinking: true
+  # number_judge_attempts: 0
+  # judges_rules_prompts_paths: {}

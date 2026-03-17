@@ -39,6 +39,15 @@
 - `config/eval/7b_aws_dryrun.yaml`
   - dry run 训练后的小规模评测配置
 
+- `config/train_rl/7b_aws_dryrun_nofp8.yaml`
+  - student 不用 FP8 的备用 dry run 配置
+
+- `config/eval/7b_aws_dryrun_nofp8.yaml`
+  - 无 FP8 dry run 对应评测配置
+
+- `config/train_rl/7b_nofp8.yaml`
+  - 如果 student 的 FP8 路径在云端不稳定，可用于正式训练的备用配置
+
 ## 4. 不要做的事
 
 - 不要把本地 A5500 smoke 配置当成 AWS 正式训练配置
@@ -125,10 +134,24 @@ curl http://localhost:8005/docs
   --config-name 7b_aws_dryrun
 ```
 
+如果 student FP8 路径失败，就改跑：
+
+```bash
+./start_rl_training.sh \
+  --config_file config/deepspeed/zero3_4GPU.yaml \
+  --config-name 7b_aws_dryrun_nofp8
+```
+
 ### 8.3 跑评测 dry run
 
 ```bash
 python eval.py --config-name 7b_aws_dryrun
+```
+
+如果你跑的是无 FP8 版本，就执行：
+
+```bash
+python eval.py --config-name 7b_aws_dryrun_nofp8
 ```
 
 ## 9. Dry run 成功的判据
@@ -149,6 +172,16 @@ python eval.py --config-name 7b_aws_dryrun
   --config_file config/deepspeed/zero3_4GPU.yaml \
   --config-name 7b
 ```
+
+如果你已经确认 student 的 FP8 路径在当前云机上不稳定，但主链路和其他模型都正常，那么正式训练时可以改用：
+
+```bash
+./start_rl_training.sh \
+  --config_file config/deepspeed/zero3_4GPU.yaml \
+  --config-name 7b_nofp8
+```
+
+这不是论文原样复现，但它能把“方法是否能在你的云环境上稳定训练”与“某个 FP8 checkpoint 的兼容性”拆开。
 
 ## 11. 你向导师汇报时建议这样说
 
