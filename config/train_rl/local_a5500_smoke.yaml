@@ -1,0 +1,92 @@
+dataset:
+  train_datasets:
+    - name_or_path: rd211/Big-Math-RL-Verified-Filtered
+      split: train
+      ratio: 1.0
+  max_train_examples: 4
+
+train:
+  number_of_problems_per_batch: 1
+  num_samples_per_problem: 2
+  per_device_train_batch_size: 2
+  learning_rate: 1.0e-6
+  beta: 0.001
+  mu: 1
+  epsilon: 0.2
+  gradient_checkpointing: false
+  epochs: 1
+  max_steps: 4
+  batch_size_ref_model: 1
+  save_policy_to_disk_every_n: 1
+
+teacher_model:
+  model_name_or_path: Qwen/Qwen2.5-0.5B-Instruct
+  attn_implementation: flash_attention_2
+  vllm:
+    temperature: 0.7
+    max_length: 2048
+    max_num_seqs: 8
+    gpu_memory_utilization: 0.28
+    number_of_gpus_per_instance: 1
+    max_number_of_instances: 1
+    load_and_unload: true
+    use_v0: true
+    enforce_eager: true
+
+student_model:
+  model_name_or_path: Qwen/Qwen2.5-0.5B-Instruct
+  vllm:
+    temperature: 0.6
+    max_length: 2048
+    max_num_seqs: 8
+    gpu_memory_utilization: 0.28
+    number_of_gpus_per_instance: 1
+    max_number_of_instances: 1
+    load_and_unload: true
+    use_v0: false
+
+judge_model:
+  model_name_or_path: Qwen/Qwen2.5-1.5B-Instruct
+  vllm:
+    temperature: 0.2
+    max_length: 2048
+    max_num_seqs: 8
+    gpu_memory_utilization: 0.34
+    number_of_gpus_per_instance: 1
+    max_number_of_instances: 1
+    load_and_unload: true
+    use_v0: false
+    enforce_eager: true
+
+reward_model:
+  model_name_or_path: Answer
+
+huggingface:
+  name: local/a5500-smoke
+  push_to_hub: false
+
+logging:
+  wandb: false
+  wandb_project: train-rl
+  wandb_run_name: local-a5500-smoke
+  run_group: smoke
+  wandb_tags: ["smoke", "a5500", "0.5b"]
+  save_dir: checkpoints/local-a5500-smoke
+  save_steps: 1
+
+generation:
+  forced_conversation_type: guided
+  max_turns: 4
+  max_tokens_in_conversation: 768
+  max_tokens_per_turn: 96
+  max_tokens_per_student_attempt: 192
+  max_tokens_per_judge_attempt: 384
+  number_student_attempts: 2
+  number_judge_attempts: 1
+  ignore_rejected_judge: true
+  extra_penalty_for_rejected_judges: 0.25
+  use_thinking: false
+  force_thinking: false
+  tokenizer_to_use: Qwen/Qwen2.5-0.5B-Instruct
+  use_experimental_shared_memory: false
+  server_port: 8005
