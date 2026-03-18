@@ -3,6 +3,7 @@ import wandb
 import hydra
 import uvicorn
 import threading
+import contextlib
 from typing import List
 from fastapi import FastAPI
 from pydantic import BaseModel
@@ -28,6 +29,26 @@ cs.store(name="config", node=RLModelTrainingConfig)
 classroom: Classroom = None
 config: RLModelTrainingConfig = None
 app = FastAPI()
+
+
+def cleanup_classroom_resources():
+    global classroom
+    if classroom is None:
+        return
+    for attr in ["teacher_model", "student_model", "judge_model", "reward_model"]:
+        model = getattr(classroom, attr, None)
+        if model is None:
+            continue
+        cleanup = getattr(model, "cleanup", None)
+        if callable(cleanup):
+            with contextlib.suppress(Exception):
+                cleanup()
+    classroom = None
+
+
+@app.on_event("shutdown")
+def shutdown_event():
+    cleanup_classroom_resources()
 
 
 class ConversationSampleRequest(BaseModel):
@@ -165,7 +186,10 @@ def main(cfg: RLModelTrainingConfig):
         log_file_path=None,  # hydra_cfg['runtime']['output_dir']
     )
 
-    uvicorn.run(app, host="0.0.0.0", port=cfg.generation.server_port)
+    try:
+        uvicorn.run(app, host="0.0.0.0", port=cfg.generation.server_port)
+    finally:
+        cleanup_classroom_resources()
 
 
 if __name__ == "__main__":

@@ -1,6 +1,7 @@
 import json
 import os
 import sys
+import contextlib
 import hydra
 import wandb
 import warnings
@@ -32,6 +33,14 @@ def cleanup_classroom(classroom):
                 cleanup()
             except Exception as exc:
                 logger.warning(f"Failed to cleanup {attr}: {exc}")
+
+
+def cleanup_torch_distributed():
+    with contextlib.suppress(Exception):
+        import torch
+
+        if torch.distributed.is_available() and torch.distributed.is_initialized():
+            torch.distributed.destroy_process_group()
 
 
 @hydra.main(config_path="config/eval", version_base=None)
@@ -281,6 +290,7 @@ def main(cfg: EvalConfig):
         wandb.finish()
 
     cleanup_classroom(classroom)
+    cleanup_torch_distributed()
     sys.stdout.flush()
     sys.stderr.flush()
     raise SystemExit(0)

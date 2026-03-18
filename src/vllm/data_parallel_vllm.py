@@ -66,11 +66,18 @@ class ParallelvLLMInference:
             f"Total GPUs: {self.total_gpus}, using {self.gpus_per_instance} per instance"
         )
 
-        # Try downloading the model to cache
-        try:
-            snapshot_download(self.model_path)
-        except Exception as e:
-            logger.warning(f"Could not download model: {e}; will load from cache/local")
+        # Only prefetch remote Hugging Face repos. Local checkpoints should be used as-is.
+        if (
+            isinstance(self.model_path, str)
+            and not os.path.exists(self.model_path)
+            and "/" in self.model_path
+        ):
+            try:
+                snapshot_download(self.model_path)
+            except Exception as e:
+                logger.warning(
+                    f"Could not download model: {e}; will load from cache/local"
+                )
 
         # Determine number of instances
         if n_instances:
@@ -209,9 +216,14 @@ class ParallelvLLMInference:
         for q in self.task_queues:
             q.put(None)
         for p in self.processes:
-            p.join()
+            p.join(timeout=10)
+            if p.is_alive():
+                logger.warning(f"Worker {p.pid} did not exit cleanly; terminating.")
+                p.terminate()
+                p.join(timeout=5)
         for q in (*self.task_queues, *self.result_queues):
             q.close()
+            q.join_thread()
         torch.cuda.empty_cache()
         logger.info("Cleaned up all resources")
 
@@ -264,85 +276,97 @@ class ParallelvLLMInference:
 
         print(f"Worker on GPUs {gpu_group} initializing for task '{inference_task}'...")
 
-        llm = LLM(
-            model=self.model_path,
-            task=str(inference_task),
-            tensor_parallel_size=self.gpus_per_instance,
-            trust_remote_code=True,
-            gpu_memory_utilization=self.gpu_memory_utilization,
-            max_model_len=self.max_model_len,
-            max_num_seqs=self.max_num_seqs,
-            enable_lora=self.use_lora,
-            enforce_eager=self.enforce_eager,
-            enable_prefix_caching=False,
-            enable_sleep_mode=self.enable_sleep_mode,
-            quantization="bitsandbytes" if self.bits_and_bytes else None,
-            load_format="bitsandbytes" if self.bits_and_bytes else "auto",
-        )
-        tokenizer = llm.get_tokenizer()
+        llm = None
+        try:
+            llm = LLM(
+                model=self.model_path,
+                task=str(inference_task),
+                tensor_parallel_size=self.gpus_per_instance,
+                trust_remote_code=True,
+                gpu_memory_utilization=self.gpu_memory_utilization,
+                max_model_len=self.max_model_len,
+                max_num_seqs=self.max_num_seqs,
+                enable_lora=self.use_lora,
+                enforce_eager=self.enforce_eager,
+                enable_prefix_caching=False,
+                enable_sleep_mode=self.enable_sleep_mode,
+                quantization="bitsandbytes" if self.bits_and_bytes else None,
+                load_format="bitsandbytes" if self.bits_and_bytes else "auto",
+            )
+            tokenizer = llm.get_tokenizer()
 
-        if self.load_and_unload:
-            llm.sleep()
-
-        result_queue.put("READY")
-        counter = 0
-
-        while True:
-            task = task_queue.get()
-            if task is None:
-                break
-            if task == "SLEEP":
-                try:
-                    llm.sleep()
-                    torch.cuda.empty_cache()
-                except Exception as e:
-                    print(f"Error during sleep: {e}")
-                result_queue.put("SLEEP_DONE")
-                continue
-
-            if self.inference_task == InferenceTask.GENERATE:
-                llm.wake_up()
-
-            chunk, sampling_params, meta = task
-            prompts = [p for _, p in chunk]
-
-            if inference_task == InferenceTask.REWARD:
-                outs = self._handle_reward_task(llm, prompts, tokenizer)
-            elif inference_task == InferenceTask.EMBEDDING:
-                outs = self._handle_embedding_task(llm, prompts)
-            elif inference_task == InferenceTask.CLASSIFY:
-                outs = self._handle_classify_task(llm, prompts)
-            else:
-                outs = self._handle_causallm_task(
-                    llm, prompts, sampling_params, meta, counter
-                )
-                counter += 1
-
-            gc.collect()
-            torch.cuda.empty_cache()
             if self.load_and_unload:
                 llm.sleep()
 
-            result_queue.put([(idx, out) for (idx, _), out in zip(chunk, outs)])
+            result_queue.put("READY")
+            counter = 0
 
-        # Final cleanup
-        from vllm.distributed.parallel_state import (
-            destroy_model_parallel,
-            destroy_distributed_environment,
-        )
-        import contextlib
+            while True:
+                task = task_queue.get()
+                if task is None:
+                    break
+                if task == "SLEEP":
+                    try:
+                        llm.sleep()
+                        torch.cuda.empty_cache()
+                    except Exception as e:
+                        print(f"Error during sleep: {e}")
+                    result_queue.put("SLEEP_DONE")
+                    continue
 
-        with contextlib.suppress(Exception):
-            destroy_model_parallel()
-        with contextlib.suppress(Exception):
-            destroy_distributed_environment()
-        with contextlib.suppress(Exception):
-            if hasattr(llm, "llm_engine") and hasattr(llm.llm_engine, "model_executor"):
-                del llm.llm_engine.model_executor
-        with contextlib.suppress(Exception):
-            del llm
-        with contextlib.suppress(Exception):
-            if torch.distributed.is_available() and torch.distributed.is_initialized():
-                torch.distributed.destroy_process_group()
-        gc.collect()
-        torch.cuda.empty_cache()
+                if self.inference_task == InferenceTask.GENERATE:
+                    llm.wake_up()
+
+                chunk, sampling_params, meta = task
+                prompts = [p for _, p in chunk]
+
+                if inference_task == InferenceTask.REWARD:
+                    outs = self._handle_reward_task(llm, prompts, tokenizer)
+                elif inference_task == InferenceTask.EMBEDDING:
+                    outs = self._handle_embedding_task(llm, prompts)
+                elif inference_task == InferenceTask.CLASSIFY:
+                    outs = self._handle_classify_task(llm, prompts)
+                else:
+                    outs = self._handle_causallm_task(
+                        llm, prompts, sampling_params, meta, counter
+                    )
+                    counter += 1
+
+                gc.collect()
+                torch.cuda.empty_cache()
+                if self.load_and_unload:
+                    llm.sleep()
+
+                result_queue.put([(idx, out) for (idx, _), out in zip(chunk, outs)])
+        finally:
+            from vllm.distributed.parallel_state import (
+                destroy_model_parallel,
+                destroy_distributed_environment,
+            )
+            import contextlib
+
+            with contextlib.suppress(Exception):
+                destroy_model_parallel()
+            with contextlib.suppress(Exception):
+                destroy_distributed_environment()
+            with contextlib.suppress(Exception):
+                if (
+                    llm is not None
+                    and hasattr(llm, "llm_engine")
+                    and hasattr(llm.llm_engine, "model_executor")
+                ):
+                    del llm.llm_engine.model_executor
+            with contextlib.suppress(Exception):
+                if llm is not None:
+                    del llm
+            with contextlib.suppress(Exception):
+                if torch.distributed.is_available() and torch.distributed.is_initialized():
+                    torch.distributed.destroy_process_group()
+            with contextlib.suppress(Exception):
+                task_queue.close()
+                task_queue.cancel_join_thread()
+            with contextlib.suppress(Exception):
+                result_queue.close()
+                result_queue.cancel_join_thread()
+            gc.collect()
+            torch.cuda.empty_cache()

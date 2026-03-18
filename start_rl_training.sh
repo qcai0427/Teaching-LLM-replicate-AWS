@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+PID_FILE=".vllm_server.pid"
+SERVER_LOG_DIR="logs"
+SERVER_LOG_FILE="${SERVER_LOG_DIR}/vllm_server.log"
+
 #-----------------------------------------
 # Graceful shutdown on Ctrl-C / SIGTERM
 #-----------------------------------------
@@ -75,14 +79,28 @@ fi
 echo "[start_rl_training.sh] Launching VLLM server..."
 ./stop_vllm_server.sh || true
 sleep 2
-./start_vllm_server.sh "${SERVER_ARGS[@]}" &
+mkdir -p "${SERVER_LOG_DIR}"
+: > "${SERVER_LOG_FILE}"
+./start_vllm_server.sh "${SERVER_ARGS[@]}" > "${SERVER_LOG_FILE}" 2>&1 &
 SERVER_PID=$!
+echo "${SERVER_PID}" > "${PID_FILE}"
+echo "[start_rl_training.sh] VLLM server log: ${SERVER_LOG_FILE}"
 
 #-----------------------------------------
 # Wait until the server responds
 #-----------------------------------------
 until curl -fsS http://localhost:8005/docs >/dev/null ; do
   echo "[start_rl_training.sh] Waiting for VLLM server..."
+  if ! kill -0 "${SERVER_PID}" 2>/dev/null; then
+    echo "[start_rl_training.sh] VLLM server exited before becoming ready."
+    echo "[start_rl_training.sh] Last server log lines:"
+    tail -n 50 "${SERVER_LOG_FILE}" || true
+    exit 1
+  fi
+  if [[ -s "${SERVER_LOG_FILE}" ]]; then
+    echo "[start_rl_training.sh] Latest server log:"
+    tail -n 10 "${SERVER_LOG_FILE}" || true
+  fi
   sleep 5
 done
 echo "[start_rl_training.sh] VLLM server is up."
@@ -101,4 +119,5 @@ echo
 # Cleanup
 #-----------------------------------------
 ./stop_vllm_server.sh
+rm -f "${PID_FILE}"
 echo "[start_rl_training.sh] Done."

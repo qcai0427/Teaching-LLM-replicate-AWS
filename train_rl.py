@@ -1,6 +1,7 @@
 from datetime import timedelta
 from accelerate import Accelerator, InitProcessGroupKwargs
 from transformers.trainer_utils import get_last_checkpoint
+import contextlib
 import os
 import hydra
 import wandb
@@ -32,6 +33,12 @@ logger = init_logger()
 
 cs = ConfigStore.instance()
 cs.store(name="config", node=RLModelTrainingConfig)
+
+
+def cleanup_torch_distributed():
+    with contextlib.suppress(Exception):
+        if torch.distributed.is_available() and torch.distributed.is_initialized():
+            torch.distributed.destroy_process_group()
 
 
 @hydra.main(config_path="config/train_rl", version_base=None)
@@ -176,6 +183,8 @@ def main(cfg: RLModelTrainingConfig):
     if cfg.huggingface.push_to_hub:
         logger.info("Pushing to hub...")
         trainer.push_to_hub()
+
+    cleanup_torch_distributed()
 
 
 if __name__ == "__main__":

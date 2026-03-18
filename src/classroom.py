@@ -902,7 +902,7 @@ class Classroom:
 
         # We now alternate between teacher and student turns until the conversation is not in the conversation student/teacher turn state
         with tqdm(
-            total=self.generation_cfg.max_turns + 1,
+            total=self.generation_cfg.max_turns,
             desc="Dialogue turns",
             leave=True,
         ) as dialogue_pbar:
@@ -917,13 +917,6 @@ class Classroom:
                     ConversationState.TEACHER_TURN,
                     ConversationState.STUDENT_TURN,
                 ]:
-                    logger.info(
-                        ("=" * 10)
-                        + f"Executing turn {round_counter}: {'Teacher' if state_to_process == ConversationState.TEACHER_TURN else 'Student'}"
-                        + ("=" * 10)
-                    )
-
-                    start_time = time.time()
                     conversations_to_process = [
                         conversation
                         for conversation in conversations
@@ -931,6 +924,14 @@ class Classroom:
                     ]
                     if len(conversations_to_process) == 0:
                         continue
+
+                    logger.info(
+                        ("=" * 10)
+                        + f"Executing turn {round_counter}: {'Teacher' if state_to_process == ConversationState.TEACHER_TURN else 'Student'}"
+                        + ("=" * 10)
+                    )
+
+                    start_time = time.time()
 
                     dialogue_pbar.set_postfix(
                         role=(

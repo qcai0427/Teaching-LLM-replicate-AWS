@@ -15,70 +15,74 @@ def load_datasets(cfg: DatasetConfig, seed: int) -> Dataset:
     """
     train_datasets, val_datasets = [], []
 
-    try:
-        for dataset in cfg.train_datasets:
-            dataset = load_dataset(dataset.name_or_path, split=dataset.split)
-            train_datasets.append(dataset)
+    train_cfg = getattr(cfg, "train_datasets", None)
+    max_train_examples = getattr(cfg, "max_train_examples", None)
+    if train_cfg:
+        try:
+            for dataset in train_cfg:
+                dataset = load_dataset(dataset.name_or_path, split=dataset.split)
+                train_datasets.append(dataset)
 
-        # We sample based on max_examples and ratios.
-        if cfg.max_train_examples is not None:
-            ratios = [dataset.ratio for dataset in cfg.train_datasets]
-            total_ratio = sum(ratios)
-            num_samples = cfg.max_train_examples
+            if max_train_examples is not None:
+                ratios = [dataset.ratio for dataset in train_cfg]
+                total_ratio = sum(ratios)
+                num_samples = max_train_examples
 
-            # Sample based on ratios
-            if num_samples == -1:
-                for i, dataset in enumerate(train_datasets):
-                    train_datasets[i] = dataset.shuffle(seed=seed)
-            else:
-                samples_per_dataset = [
-                    int(num_samples * ratio / total_ratio) for ratio in ratios
-                ]
-                for i, dataset in enumerate(train_datasets):
-                    train_datasets[i] = dataset.shuffle(seed=seed).select(
-                        range(samples_per_dataset[i])
-                    )
-        # Concatenate the datasets
-        train_datasets = concatenate_datasets(train_datasets)
-        train_datasets = train_datasets.shuffle(seed=seed)
-    except Exception as e:
+                if num_samples == -1:
+                    for i, dataset in enumerate(train_datasets):
+                        train_datasets[i] = dataset.shuffle(seed=seed)
+                else:
+                    samples_per_dataset = [
+                        int(num_samples * ratio / total_ratio) for ratio in ratios
+                    ]
+                    for i, dataset in enumerate(train_datasets):
+                        train_datasets[i] = dataset.shuffle(seed=seed).select(
+                            range(samples_per_dataset[i])
+                        )
+            train_datasets = concatenate_datasets(train_datasets)
+            train_datasets = train_datasets.shuffle(seed=seed)
+        except Exception as e:
+            train_datasets = None
+            print("An error occurred while loading training datasets.")
+            print(e)
+    else:
         train_datasets = None
-        print("No training datasets provided or an error occurred while loading them.")
-        print(e)
 
-    try:
-        for dataset in cfg.eval_datasets:
-            dataset = load_dataset(dataset.name_or_path, split=dataset.split)
-            val_datasets.append(dataset)
+    eval_cfg = getattr(cfg, "eval_datasets", None)
+    max_val_examples = getattr(cfg, "max_val_examples", None)
+    if eval_cfg:
+        try:
+            for dataset in eval_cfg:
+                dataset = load_dataset(dataset.name_or_path, split=dataset.split)
+                val_datasets.append(dataset)
 
-        if len(val_datasets) == 0:
-            return train_datasets, None
+            if len(val_datasets) == 0:
+                return train_datasets, None
 
-        if cfg.max_val_examples is not None:
-            ratios = [dataset.ratio for dataset in cfg.eval_datasets]
-            total_ratio = sum(ratios)
-            num_samples = cfg.max_val_examples
+            if max_val_examples is not None:
+                ratios = [dataset.ratio for dataset in eval_cfg]
+                total_ratio = sum(ratios)
+                num_samples = max_val_examples
 
-            # Sample based on ratios
-            if num_samples == -1:
-                for i, dataset in enumerate(val_datasets):
-                    val_datasets[i] = dataset.shuffle(seed=seed)
-            else:
-                samples_per_dataset = [
-                    int(num_samples * ratio / total_ratio) for ratio in ratios
-                ]
-                for i, dataset in enumerate(val_datasets):
-                    val_datasets[i] = dataset.shuffle(seed=seed).select(
-                        range(samples_per_dataset[i])
-                    )
+                if num_samples == -1:
+                    for i, dataset in enumerate(val_datasets):
+                        val_datasets[i] = dataset.shuffle(seed=seed)
+                else:
+                    samples_per_dataset = [
+                        int(num_samples * ratio / total_ratio) for ratio in ratios
+                    ]
+                    for i, dataset in enumerate(val_datasets):
+                        val_datasets[i] = dataset.shuffle(seed=seed).select(
+                            range(samples_per_dataset[i])
+                        )
 
-        val_datasets = concatenate_datasets(val_datasets)
-        val_datasets = val_datasets.shuffle(seed=seed)
-    except Exception as e:
+            val_datasets = concatenate_datasets(val_datasets)
+            val_datasets = val_datasets.shuffle(seed=seed)
+        except Exception as e:
+            val_datasets = None
+            print("An error occurred while loading validation datasets.")
+            print(e)
+    else:
         val_datasets = None
-        print(
-            "No validation datasets provided or an error occurred while loading them."
-        )
-        print(e)
 
     return train_datasets, val_datasets
