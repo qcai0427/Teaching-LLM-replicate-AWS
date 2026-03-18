@@ -4,3 +4,4 @@ outputs
 .env
 __pycache__
 checkpoints
+.vllm_server.pid

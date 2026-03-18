@@ -31,9 +31,10 @@ def _unsafe_load(*args, **kwargs):
 
 torch.load = _unsafe_load
 
-import os
 import gc
-import shutil, os, re
+import os
+import re
+import shutil
 import time
 import wandb
 import deepspeed
@@ -85,6 +86,15 @@ logger = init_logger()
 
 
 RewardFunc = Union[str, PreTrainedModel, Callable[[list, list], list[float]]]
+
+
+def _format_duration(seconds: float) -> str:
+    seconds = max(0, int(seconds))
+    hours, remainder = divmod(seconds, 3600)
+    minutes, secs = divmod(remainder, 60)
+    if hours:
+        return f"{hours:02d}:{minutes:02d}:{secs:02d}"
+    return f"{minutes:02d}:{secs:02d}"
 
 
 class RepeatSampler(Sampler):
@@ -383,6 +393,8 @@ class ClassroomGRPOTrainer(Trainer):
             callbacks=callbacks,
             optimizers=optimizers,
         )
+
+        self._wall_clock_train_start = time.time()
 
         self.num_processes = self.accelerator.num_processes
         self.num_nodes = int(os.getenv("NNODES", "1"))
@@ -1218,4 +1230,23 @@ class ClassroomGRPOTrainer(Trainer):
             super().log(logs, start_time)
         else:  # transformers<=4.46
             super().log(logs)
+
+        if mode == "train" and self.accelerator.is_main_process:
+            total_steps = getattr(self.state, "max_steps", 0) or 0
+            current_step = getattr(self.state, "global_step", 0) or 0
+            elapsed = time.time() - self._wall_clock_train_start
+            avg_step_time = elapsed / current_step if current_step > 0 else 0.0
+            remaining_steps = max(total_steps - current_step, 0)
+            eta_seconds = avg_step_time * remaining_steps
+            progress = (current_step / total_steps * 100.0) if total_steps else 0.0
+
+            logger.info(
+                "[ETA] step %s/%s | %.1f%% | elapsed %s | eta %s | avg %.1fs/step",
+                current_step,
+                total_steps if total_steps else "?",
+                progress,
+                _format_duration(elapsed),
+                _format_duration(eta_seconds) if current_step > 0 else "--:--",
+                avg_step_time,
+            )
         self._metrics[mode].clear()

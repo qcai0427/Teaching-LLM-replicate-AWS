@@ -35,7 +35,7 @@
   - [qcai0427/Teaching-LLM-replicate-AWS](https://github.com/qcai0427/Teaching-LLM-replicate-AWS)
 - 这就是以后云服务器直接 clone 的仓库
 - 最新云端基线提交：
-  - `f26de9a`
+  - 以 `origin/main` 最新提交为准
 
 这个仓库里已经包含：
 
@@ -359,11 +359,7 @@ cd Teaching-LLM-replicate-AWS
 git log --oneline -n 3
 ```
 
-你应该能看到最新提交类似：
-
-```text
-f26de9a ...
-```
+你应该能看到你 GitHub 上 `origin/main` 的最新提交。
 
 ---
 
@@ -702,7 +698,72 @@ mkdir -p logs reports
 
 ## 20. 跑 dry run
 
-### 20.1 FP8 dry run
+### 20.0 先检查这台机器能不能无人值守自动关机
+
+在云机上先执行：
+
+```bash
+sudo -n true
+```
+
+解释：
+
+- 如果这条命令直接返回，没有报错，说明当前用户有**免密 sudo**
+- 那你就可以放心使用“训练成功后自动关机”的包装脚本
+- 如果它报错说需要密码，说明这台机器**不能无人值守自动关机**
+
+这一步非常重要，因为它决定了你能不能放心去睡觉。
+
+### 20.1 推荐入口：过滤控制台输出 + 完整日志落盘 + 训练成功后自动关机
+
+这个仓库现在提供了一个包装脚本：
+
+- [run_train_eval_shutdown.sh](/home/caiqi/phd/Codex/Teaching-LLM-replicate-AWS/run_train_eval_shutdown.sh)
+
+它会做三件事：
+
+1. 把完整原始日志持续保存到 `logs/*_full.log`
+2. 控制台只显示关键行：
+   - VLLM server 是否起来
+   - 全局 step / total step
+   - ETA
+   - loss / reward 摘要
+   - 训练完成或失败
+   - 评测结果摘要
+3. 如果设置了 `--shutdown-policy success`，会在训练和评测都成功后自动执行 `shutdown`
+
+注意：
+
+- `--shutdown-policy success` 只会在任务成功时关机
+- `--shutdown-policy always` 表示失败也关机
+- `--shutdown-policy never` 表示永不自动关机
+- 如果当前用户没有免密 sudo，它不会卡死，而是会打印提示并跳过自动关机
+
+### 20.2 FP8 dry run：推荐命令
+
+```bash
+bash run_train_eval_shutdown.sh \
+  --job-name aws-dryrun \
+  --train-config-file config/deepspeed/zero3_4GPU.yaml \
+  --train-config-name 7b_aws_dryrun \
+  --eval-config-name 7b_aws_dryrun \
+  --shutdown-policy success
+```
+
+### 20.3 no-FP8 dry run：推荐命令
+
+```bash
+bash run_train_eval_shutdown.sh \
+  --job-name aws-dryrun-nofp8 \
+  --train-config-file config/deepspeed/zero3_4GPU.yaml \
+  --train-config-name 7b_aws_dryrun_nofp8 \
+  --eval-config-name 7b_aws_dryrun_nofp8 \
+  --shutdown-policy success
+```
+
+### 20.4 如果你暂时不想自动关机，也可以继续用原始命令
+
+FP8：
 
 ```bash
 ./start_rl_training.sh \
@@ -711,7 +772,13 @@ mkdir -p logs reports
   2>&1 | tee logs/aws_dryrun_train.log
 ```
 
-### 20.2 no-FP8 dry run
+评测：
+
+```bash
+python eval.py --config-name 7b_aws_dryrun 2>&1 | tee logs/aws_dryrun_eval.log
+```
+
+no-FP8：
 
 ```bash
 ./start_rl_training.sh \
@@ -720,9 +787,29 @@ mkdir -p logs reports
   2>&1 | tee logs/aws_dryrun_nofp8_train.log
 ```
 
+评测：
+
+```bash
+python eval.py --config-name 7b_aws_dryrun_nofp8 2>&1 | tee logs/aws_dryrun_nofp8_eval.log
+```
+
 ---
 
 ## 21. 监控 dry run
+
+如果你用了 `run_train_eval_shutdown.sh`，那控制台已经是过滤后的关键输出，通常不需要再盯完整训练日志。
+
+完整日志会自动保存到：
+
+- `logs/aws-dryrun_train_full.log`
+- `logs/aws-dryrun_eval_full.log`
+- `logs/aws-dryrun-nofp8_train_full.log`
+- `logs/aws-dryrun-nofp8_eval_full.log`
+
+其中：
+
+- 控制台只看关键进度和 ETA
+- 真正完整的原始日志都在 `*_full.log` 里
 
 另开一个本地终端，再次 SSH 登录：
 
@@ -801,19 +888,23 @@ ls -lh reports/aws_dryrun_nofp8_eval_metrics.json
 ### 24.1 论文风格 FP8 full run
 
 ```bash
-./start_rl_training.sh \
-  --config_file config/deepspeed/zero3_4GPU.yaml \
-  --config-name 7b \
-  2>&1 | tee logs/full_train_7b.log
+bash run_train_eval_shutdown.sh \
+  --job-name full-7b \
+  --train-config-file config/deepspeed/zero3_4GPU.yaml \
+  --train-config-name 7b \
+  --eval-config-name 7b_local \
+  --shutdown-policy success
 ```
 
 ### 24.2 no-FP8 full run
 
 ```bash
-./start_rl_training.sh \
-  --config_file config/deepspeed/zero3_4GPU.yaml \
-  --config-name 7b_nofp8 \
-  2>&1 | tee logs/full_train_7b_nofp8.log
+bash run_train_eval_shutdown.sh \
+  --job-name full-7b-nofp8 \
+  --train-config-file config/deepspeed/zero3_4GPU.yaml \
+  --train-config-name 7b_nofp8 \
+  --eval-config-name 7b_local_nofp8 \
+  --shutdown-policy success
 ```
 
 ---
@@ -988,19 +1079,25 @@ scp -i ~/keys/aws-gpu.pem ubuntu@<EC2_PUBLIC_IP>:~/work/Teaching-LLM-replicate-A
 
 ### 28.2 你看不到的
 
-这个项目没有专门做一个“超级准确 ETA 剩余时间预测器”。
+现在这个仓库已经补了一条**全局 ETA 行**，会在每个训练 step 后额外打印一次：
+
+```text
+[ETA] step 2/4 | 50.0% | elapsed 02:36 | eta 02:28 | avg 74.0s/step
+```
 
 所以：
 
 - 能看到进度
 - 能看到 step
 - 能看到日志
-- 但剩余时间通常只能粗估
+- 能看到一个基于已完成 step 平均耗时计算的 ETA
+
+它不是完美预测器，但对“我大概还要多久”“能不能睡觉”“几点该回来收结果”已经足够有用。
 
 最现实的办法：
 
-1. 观察最近几个 step 大概多久
-2. 用剩余 step 数乘一下
+1. 看控制台里的 `[ETA]`
+2. 如果要核对细节，再看 `logs/*_full.log`
 
 ---
 
@@ -1021,6 +1118,28 @@ ps -ef | grep -E "train_rl.py|vllm_server.py|uvicorn" | grep -v grep
 不是：
 
 - `Terminate instance`
+
+### 如果你用了自动关机包装脚本
+
+那就不需要你手动估时间。
+
+建议流程是：
+
+1. 先执行：
+
+```bash
+sudo -n true
+```
+
+2. 如果通过，再运行：
+
+```bash
+bash run_train_eval_shutdown.sh ...
+```
+
+3. 训练和评测成功后，它会自动执行关机
+
+这样即使你睡觉去了，也不会因为训练完成后继续空烧太久。
 
 ---
 
