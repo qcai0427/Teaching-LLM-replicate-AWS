@@ -40,7 +40,7 @@ dataset:
     - name_or_path: rd211/Big-Math-RL-Verified-Filtered
       split: train
       ratio: 1.0
-  max_eval_examples: 64
+  max_val_examples: 64
 
 generation:
   max_turns: 15
@@ -54,7 +54,10 @@ generation:
 
 logging:
   wandb: false
-  run_name: 7b-local-eval
+  wandb_project: eval
+  wandb_run_name: 7b-local-eval
+  run_group: 7b
+  wandb_tags: ["7b", "local-eval"]
 
 export_conversations_path: reports/7b_eval_conversations.json
 export_metrics_path: reports/7b_eval_metrics.json

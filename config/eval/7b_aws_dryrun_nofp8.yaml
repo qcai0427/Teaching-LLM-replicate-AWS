@@ -1,5 +1,5 @@
 teacher_model:
-  model_name_or_path: Qwen/Qwen2.5-7B-Instruct
+  model_name_or_path: checkpoints/7b-aws-dryrun-nofp8/model
   vllm:
     gpu_memory_utilization: 0.30
     number_of_gpus_per_instance: 4
@@ -40,7 +40,7 @@ dataset:
     - name_or_path: rd211/Big-Math-RL-Verified-Filtered
       split: train
       ratio: 1.0
-  max_eval_examples: 4
+  max_val_examples: 4
 
 generation:
   max_turns: 4
@@ -53,7 +53,10 @@ generation:
 
 logging:
   wandb: false
-  run_name: 7b-aws-dryrun-nofp8-eval
+  wandb_project: eval
+  wandb_run_name: 7b-aws-dryrun-nofp8-eval
+  run_group: aws-dryrun
+  wandb_tags: ["7b", "aws", "dryrun", "nofp8"]
 
 export_conversations_path: reports/aws_dryrun_nofp8_eval_conversations.json
 export_metrics_path: reports/aws_dryrun_nofp8_eval_metrics.json

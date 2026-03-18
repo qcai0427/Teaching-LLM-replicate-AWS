@@ -272,58 +272,68 @@ export WANDB_API_KEY=你的key
 
 ---
 
-## 6. 第一次创建 AWS 实例时你要拿到什么
+## 6. 第一次进入 Google Cloud
 
-你在 AWS 控制台创建 EC2 实例时，要创建一个新的 `Key pair`。
+你的导师已经把你加进了 GCP 项目：
 
-建议：
+- `SafeLearn`
 
-- 类型：`RSA`
-- 格式：`.pem`
+你现在最简单的入口是：
 
-下载下来以后，把它放到你本地：
+1. 打开 [Google Cloud Console](https://console.cloud.google.com/)
+2. 用导师邀请你的那个 Google 账号登录
+3. 左上角切换项目，确认当前项目是 `SafeLearn`
 
-```bash
-~/keys/aws-gpu.pem
-```
+如果看不到项目：
 
-然后在你本地终端执行：
-
-```bash
-chmod 400 ~/keys/aws-gpu.pem
-```
-
-这一步必须做。
+- 先检查是不是登错 Google 账号
+- 再让导师确认邀请是否发到了正确邮箱
 
 ---
 
-## 7. 第一次 SSH 登录
+## 7. 第一次创建 GCP GPU 虚拟机
 
-在你本地电脑终端执行：
+第一次建议你优先按下面的思路选，不要自己自由发挥：
 
-```bash
-ssh -i ~/keys/aws-gpu.pem ubuntu@<EC2_PUBLIC_IP>
-```
+### 7.1 目标机型
 
-例子：
+如果能拿到，首选：
 
-```bash
-ssh -i ~/keys/aws-gpu.pem ubuntu@3.145.88.120
-```
+- `a2-ultragpu-4g`
 
-第一次连接时可能会问你：
+这对应：
 
-```text
-Are you sure you want to continue connecting (yes/no/[fingerprint])?
-```
+- 4 × A100 80GB
 
-输入：
+这是最接近论文环境的 GCP 方案。
 
-```text
-yes
-```
+### 7.2 控制台里怎么点
 
-就行。
+1. 进入：
+   [Compute Engine 虚拟机](https://console.cloud.google.com/compute/instances)
+2. 点：
+   `创建实例`
+3. 建议名字：
+   `pedagogicalrl-a2-4g`
+4. 区域和可用区：
+   选择有 A2 Ultra 的区域
+5. 机器配置：
+   选 `a2-ultragpu-4g`
+6. 操作系统：
+   选 `Ubuntu 22.04`
+7. 启动磁盘：
+   建议至少 `500 GB`
+8. 创建
+
+### 7.3 第一次连进去最简单的方法
+
+最简单是直接点 GCP 控制台里的：
+
+- `SSH`
+
+这样你第一次不用自己折腾本地 SSH key。
+
+等流程熟了，再改成你本地终端直接 `ssh` 连。
 
 ---
 
@@ -344,6 +354,27 @@ python3 --version
 
 - `nvidia-smi` 能看到 GPU：继续
 - `nvidia-smi` 不正常：停止，不要继续烧钱
+
+### 8.1 先确认你现在待在哪里
+
+后面你最常接触的目录大概就这几个：
+
+- 项目仓库：
+  - `~/work/Teaching-LLM-replicate-AWS`
+- 训练 checkpoint：
+  - `~/work/Teaching-LLM-replicate-AWS/checkpoints/...`
+- 训练/评测日志：
+  - `~/work/Teaching-LLM-replicate-AWS/logs/...`
+- 导出的评测结果：
+  - `~/work/Teaching-LLM-replicate-AWS/reports/...`
+- Hugging Face 模型/数据缓存：
+  - `~/.cache/huggingface`
+- vLLM compile cache：
+  - `~/.cache/vllm`
+
+所以你真正要保护的，不是某条命令，而是这些目录都放在 **持久磁盘** 上。
+
+默认只要你在家目录和仓库目录里工作，通常就是持久磁盘，不会因为正常 `stop` VM 而清空。
 
 ---
 
@@ -811,11 +842,11 @@ python eval.py --config-name 7b_aws_dryrun_nofp8 2>&1 | tee logs/aws_dryrun_nofp
 - 控制台只看关键进度和 ETA
 - 真正完整的原始日志都在 `*_full.log` 里
 
-另开一个本地终端，再次 SSH 登录：
+如果你在 GCP 上，最简单的做法是：
 
-```bash
-ssh -i ~/keys/aws-gpu.pem ubuntu@<EC2_PUBLIC_IP>
-```
+- 再开一个浏览器控制台 SSH 窗口
+
+如果你已经配置好了本地 SSH，也可以再开一个本地终端重新登录。
 
 进入项目并激活环境：
 
@@ -1045,25 +1076,32 @@ tar -czf results_7b_nofp8.tar.gz checkpoints/7b-nofp8 reports/7b_nofp8_eval_conv
 
 ### 27.3 下载回本地
 
-在你**本地电脑**终端执行，不是在云机里执行。
+在你**本地电脑**上操作，不是在云机里操作。
+
+如果你在 GCP 上，最简单的方式有两个：
+
+#### 方法 A：先重新开机，再用浏览器控制台把文件下载下来
+
+优点：
+
+- 最少折腾
+- 不需要先配置本地 `gcloud`
+
+#### 方法 B：用 `gcloud compute scp`
 
 FP8：
 
 ```bash
-scp -i ~/keys/aws-gpu.pem ubuntu@<EC2_PUBLIC_IP>:~/work/Teaching-LLM-replicate-AWS/results_7b.tar.gz .
-```
-
-例子：
-
-```bash
-scp -i ~/keys/aws-gpu.pem ubuntu@3.145.88.120:~/work/Teaching-LLM-replicate-AWS/results_7b.tar.gz .
+gcloud compute scp <YOUR_GCP_USERNAME>@<VM_NAME>:~/work/Teaching-LLM-replicate-AWS/results_7b.tar.gz . --zone=<ZONE>
 ```
 
 no-FP8：
 
 ```bash
-scp -i ~/keys/aws-gpu.pem ubuntu@<EC2_PUBLIC_IP>:~/work/Teaching-LLM-replicate-AWS/results_7b_nofp8.tar.gz .
+gcloud compute scp <YOUR_GCP_USERNAME>@<VM_NAME>:~/work/Teaching-LLM-replicate-AWS/results_7b_nofp8.tar.gz . --zone=<ZONE>
 ```
+
+如果你走的是 AWS，那才用 `scp -i ~/keys/aws-gpu.pem ...` 那套命令。
 
 ---
 

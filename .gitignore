@@ -1,4 +1,5 @@
 ./wandb/
+wandb/
 output
 outputs
 .env
