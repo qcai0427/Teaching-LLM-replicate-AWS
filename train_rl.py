@@ -227,6 +227,11 @@ def main(cfg: RLModelTrainingConfig):
 
     if getattr(trainer.args, "hf_deepspeed_config", None) is not None:
         _refresh_hf_deepspeed_config(trainer.args.hf_deepspeed_config, trainer.args)
+    plugin_hf_ds_config = getattr(
+        getattr(trainer.accelerator.state, "deepspeed_plugin", None), "hf_ds_config", None
+    )
+    if plugin_hf_ds_config is not None:
+        _refresh_hf_deepspeed_config(plugin_hf_ds_config, trainer.args)
 
     last_ckpt = None
     if os.path.isdir(cfg.logging.save_dir):
