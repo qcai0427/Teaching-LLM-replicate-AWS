@@ -1,0 +1,55 @@
+teacher_model:
+  model_name_or_path: checkpoints/7b/model
+  use_openrouter: false
+  vllm:
+    temperature: 0.6
+    max_length: 12000
+    max_num_seqs: 512
+    gpu_memory_utilization: 0.85
+    number_of_gpus_per_instance: 1
+
+student_model:
+  model_name_or_path: neuralmagic/Meta-Llama-3.1-8B-Instruct-FP8
+  vllm:
+    temperature: 0.6
+    max_length: 12000
+    max_num_seqs: 512
+    gpu_memory_utilization: 0.85
+    number_of_gpus_per_instance: 1
+
+judge_model:
+  model_name_or_path: google/gemma-3-27b-it
+  vllm:
+    temperature: 0.6
+    max_length: 12000
+    max_num_seqs: 512
+    gpu_memory_utilization: 0.85
+    number_of_gpus_per_instance: 1
+
+reward_model:
+  model_name_or_path: "Answer"
+
+dataset:
+  eval_datasets:
+    - name_or_path: rd211/Big-Math-RL-Verified-Filtered
+      split: test
+      ratio: 1.0
+  max_val_examples: 500
+
+generation:
+  ignore_rejected_judge: true
+  extra_penalty_for_rejected_judges: 0.5
+  use_thinking: false
+  force_thinking: false
+  number_judge_attempts: 2
+  number_student_attempts: 8
+
+logging:
+  wandb: true
+  wandb_project: eval
+  wandb_run_name: 7b-paper-eval
+  run_group: tutor
+  wandb_tags: ["tutor", "7b", "paper-eval"]
+
+export_conversations_path: reports/7b_paper_eval_conversations.json
+export_metrics_path: reports/7b_paper_eval_metrics.json
