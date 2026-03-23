@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+PYTHON_BIN="${PYTHON_BIN:-python}"
+
 echo "[run_train_eval_shutdown.sh] Deprecated: prefer ./run_vast_job.sh for interruptible Vast workflows." >&2
 
 usage() {
@@ -84,7 +86,7 @@ run_with_filtered_console() {
   set +e
   stdbuf -oL -eL "$@" 2>&1 \
     | tee "${logfile}" \
-    | python3 scripts/filter_runtime_logs.py --mode "${mode}"
+    | "${PYTHON_BIN}" scripts/filter_runtime_logs.py --mode "${mode}"
   local cmd_status=${PIPESTATUS[0]}
   set -e
   return "${cmd_status}"

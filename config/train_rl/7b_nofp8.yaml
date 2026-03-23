@@ -54,7 +54,7 @@ huggingface:
 logging:
   wandb: true
   wandb_project: train-rl
-  wandb_run_name: Qwen2.5-7B-Instruct-HardLambda1.0-NoFP8
+  wandb_run_name: Qwen2.5-7B-Instruct-SoftLambda0.5-NoFP8
   run_group: 7b
   wandb_tags: ["7b", "nofp8"]
   save_dir: checkpoints/7b-nofp8

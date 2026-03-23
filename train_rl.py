@@ -41,6 +41,13 @@ def cleanup_torch_distributed():
             torch.distributed.destroy_process_group()
 
 
+def _apply_runtime_deepspeed_batch_config(ds_config, micro_batch_size, grad_accum, world_size):
+    if isinstance(ds_config, dict):
+        ds_config["gradient_accumulation_steps"] = int(grad_accum)
+        ds_config["train_micro_batch_size_per_gpu"] = int(micro_batch_size)
+        ds_config["train_batch_size"] = int(micro_batch_size * grad_accum * world_size)
+
+
 @hydra.main(config_path="config/train_rl", version_base=None)
 def main(cfg: RLModelTrainingConfig):
 
@@ -142,15 +149,20 @@ def main(cfg: RLModelTrainingConfig):
 
     if accelerator.state.deepspeed_plugin is not None:
         plugin_cfg = accelerator.state.deepspeed_plugin.deepspeed_config
-        plugin_cfg["gradient_accumulation_steps"] = int(gradient_accumulation_steps)
-        plugin_cfg["train_micro_batch_size_per_gpu"] = int(
-            cfg.train.per_device_train_batch_size
+        _apply_runtime_deepspeed_batch_config(
+            plugin_cfg,
+            cfg.train.per_device_train_batch_size,
+            gradient_accumulation_steps,
+            accelerator.num_processes,
         )
-        plugin_cfg["train_batch_size"] = int(
-            cfg.train.per_device_train_batch_size
-            * gradient_accumulation_steps
-            * accelerator.num_processes
-        )
+        hf_ds_config = getattr(accelerator.state.deepspeed_plugin, "hf_ds_config", None)
+        if hf_ds_config is not None:
+            _apply_runtime_deepspeed_batch_config(
+                getattr(hf_ds_config, "config", None),
+                cfg.train.per_device_train_batch_size,
+                gradient_accumulation_steps,
+                accelerator.num_processes,
+            )
 
     trainer = ClassroomGRPOTrainer(
         model=model_config.model_name_or_path,
@@ -197,6 +209,14 @@ def main(cfg: RLModelTrainingConfig):
         train_dataset=train_dataset,
         processing_class=tokenizer,
     )
+
+    if getattr(trainer.args, "hf_deepspeed_config", None) is not None:
+        _apply_runtime_deepspeed_batch_config(
+            getattr(trainer.args.hf_deepspeed_config, "config", None),
+            cfg.train.per_device_train_batch_size,
+            gradient_accumulation_steps,
+            accelerator.num_processes,
+        )
 
     last_ckpt = None
     if os.path.isdir(cfg.logging.save_dir):

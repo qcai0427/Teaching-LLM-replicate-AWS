@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+PYTHON_BIN="${PYTHON_BIN:-python}"
+
 usage() {
   cat <<'EOF'
 Usage:
@@ -55,9 +57,9 @@ fi
 
 mkdir -p checkpoints logs reports .runtime
 
-RESOLVED_JSON="$(python3 scripts/resolve_run_config.py --mode train --config-name "${TRAIN_CONFIG_NAME}" "${TRAIN_OVERRIDES[@]}")"
-SAVE_DIR="$(python3 -c 'import json,sys; print(json.loads(sys.argv[1])["logging_save_dir"])' "${RESOLVED_JSON}")"
-SERVER_PORT="$(python3 -c 'import json,sys; print(json.loads(sys.argv[1])["generation_server_port"])' "${RESOLVED_JSON}")"
+RESOLVED_JSON="$("${PYTHON_BIN}" scripts/resolve_run_config.py --mode train --config-name "${TRAIN_CONFIG_NAME}" "${TRAIN_OVERRIDES[@]}")"
+SAVE_DIR="$("${PYTHON_BIN}" -c 'import json,sys; print(json.loads(sys.argv[1])["logging_save_dir"])' "${RESOLVED_JSON}")"
+SERVER_PORT="$("${PYTHON_BIN}" -c 'import json,sys; print(json.loads(sys.argv[1])["generation_server_port"])' "${RESOLVED_JSON}")"
 
 TRAIN_LOG="logs/${JOB_NAME}_train_full.log"
 SERVER_LOG="logs/${JOB_NAME}_vllm_server.log"
@@ -66,7 +68,7 @@ PID_FILE=".runtime/${JOB_NAME}_vllm_server.pid"
 
 find_last_checkpoint() {
   local save_dir="$1"
-  python3 - "$save_dir" <<'PY'
+  "${PYTHON_BIN}" - "$save_dir" <<'PY'
 from pathlib import Path
 import re
 import sys
@@ -122,7 +124,7 @@ on_signal() {
   fi
   LAST_CHECKPOINT="$(find_last_checkpoint "${SAVE_DIR}")"
   VLLM_PID_FILE="${PID_FILE}" ./stop_vllm_server.sh || true
-  python3 scripts/create_run_summary.py \
+  "${PYTHON_BIN}" scripts/create_run_summary.py \
     "${SUMMARY_ARGS_BASE[@]}" \
     --last-checkpoint "${LAST_CHECKPOINT}" \
     --status interrupted >/dev/null 2>&1 || true
@@ -144,7 +146,7 @@ VLLM_PID_FILE="${PID_FILE}" \
 VLLM_SERVER_LOG_FILE="${SERVER_LOG}" \
 VLLM_SERVER_PORT="${SERVER_PORT}" \
 stdbuf -oL -eL "${TRAIN_CMD[@]}" \
-  > >(tee "${TRAIN_LOG}" | python3 scripts/filter_runtime_logs.py --mode train) 2>&1 &
+  > >(tee "${TRAIN_LOG}" | "${PYTHON_BIN}" scripts/filter_runtime_logs.py --mode train) 2>&1 &
 RUN_PID=$!
 wait "${RUN_PID}"
 STATUS=$?
@@ -158,9 +160,9 @@ SUMMARY_ARGS=(
 
 if [[ "${STATUS}" -ne 0 ]]; then
   echo "[run_vast_training.sh] Training failed. Full log: ${TRAIN_LOG}" >&2
-  python3 scripts/create_run_summary.py "${SUMMARY_ARGS[@]}" --status failed
+  "${PYTHON_BIN}" scripts/create_run_summary.py "${SUMMARY_ARGS[@]}" --status failed
   exit "${STATUS}"
 fi
 
-python3 scripts/create_run_summary.py "${SUMMARY_ARGS[@]}" --status trained
+"${PYTHON_BIN}" scripts/create_run_summary.py "${SUMMARY_ARGS[@]}" --status trained
 echo "[run_vast_training.sh] Training finished successfully."

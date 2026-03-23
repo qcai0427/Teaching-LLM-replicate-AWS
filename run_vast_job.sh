@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+PYTHON_BIN="${PYTHON_BIN:-python}"
+
 usage() {
   cat <<'EOF'
 Usage:
@@ -85,10 +87,10 @@ fi
 
 mkdir -p checkpoints logs reports .runtime
 
-TRAIN_JSON="$(python3 scripts/resolve_run_config.py --mode train --config-name "${TRAIN_CONFIG_NAME}" "${TRAIN_OVERRIDES[@]}")"
-SAVE_DIR="$(python3 -c 'import json,sys; print(json.loads(sys.argv[1])["logging_save_dir"])' "${TRAIN_JSON}")"
-CONFIG_HF_NAME="$(python3 -c 'import json,sys; print(json.loads(sys.argv[1])["huggingface_name"])' "${TRAIN_JSON}")"
-SERVER_PORT="$(python3 -c 'import json,sys; print(json.loads(sys.argv[1])["generation_server_port"])' "${TRAIN_JSON}")"
+TRAIN_JSON="$("${PYTHON_BIN}" scripts/resolve_run_config.py --mode train --config-name "${TRAIN_CONFIG_NAME}" "${TRAIN_OVERRIDES[@]}")"
+SAVE_DIR="$("${PYTHON_BIN}" -c 'import json,sys; print(json.loads(sys.argv[1])["logging_save_dir"])' "${TRAIN_JSON}")"
+CONFIG_HF_NAME="$("${PYTHON_BIN}" -c 'import json,sys; print(json.loads(sys.argv[1])["huggingface_name"])' "${TRAIN_JSON}")"
+SERVER_PORT="$("${PYTHON_BIN}" -c 'import json,sys; print(json.loads(sys.argv[1])["generation_server_port"])' "${TRAIN_JSON}")"
 if [[ -z "${HF_ARTIFACT_PREFIX}" ]]; then
   HF_ARTIFACT_PREFIX="runs/${JOB_NAME}"
 fi
@@ -142,19 +144,19 @@ EVAL_CMD=(
 echo "[run_vast_job.sh] Eval log: ${EVAL_LOG}"
 set +e
 stdbuf -oL -eL "${EVAL_CMD[@]}" \
-  > >(tee "${EVAL_LOG}" | python3 scripts/filter_runtime_logs.py --mode eval) 2>&1
+  > >(tee "${EVAL_LOG}" | "${PYTHON_BIN}" scripts/filter_runtime_logs.py --mode eval) 2>&1
 EVAL_STATUS=$?
 set -e
 
 if [[ "${EVAL_STATUS}" -ne 0 ]]; then
   echo "[run_vast_job.sh] Eval failed. Full log: ${EVAL_LOG}" >&2
-  python3 scripts/create_run_summary.py \
+  "${PYTHON_BIN}" scripts/create_run_summary.py \
     "${SUMMARY_ARGS[@]}" \
     --status eval_failed
   exit "${EVAL_STATUS}"
 fi
 
-python3 scripts/create_run_summary.py \
+"${PYTHON_BIN}" scripts/create_run_summary.py \
   "${SUMMARY_ARGS[@]}" \
   --status evaluated
 
@@ -166,7 +168,7 @@ fi
 UPLOAD_LOG="logs/${JOB_NAME}_upload_full.log"
 echo "[run_vast_job.sh] Upload log: ${UPLOAD_LOG}"
 set +e
-python3 scripts/upload_run_to_hub.py \
+"${PYTHON_BIN}" scripts/upload_run_to_hub.py \
   --repo-id "${HF_REPO_ID}" \
   --repo-type "${HF_REPO_TYPE}" \
   --model-dir "${SAVE_DIR}/model" \
@@ -180,13 +182,13 @@ set -e
 
 if [[ "${UPLOAD_STATUS}" -ne 0 ]]; then
   echo "[run_vast_job.sh] Upload failed. Local artifacts were preserved." >&2
-  python3 scripts/create_run_summary.py \
+  "${PYTHON_BIN}" scripts/create_run_summary.py \
     "${SUMMARY_ARGS[@]}" \
     --status upload_failed
   exit "${UPLOAD_STATUS}"
 fi
 
-python3 scripts/create_run_summary.py \
+"${PYTHON_BIN}" scripts/create_run_summary.py \
   "${SUMMARY_ARGS[@]}" \
   --status uploaded
 
