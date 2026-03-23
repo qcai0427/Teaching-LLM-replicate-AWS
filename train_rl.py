@@ -118,6 +118,20 @@ def main(cfg: RLModelTrainingConfig):
     # Training
     #############################################################################
 
+    gradient_accumulation_steps = (
+        cfg.train.num_samples_per_problem
+        * cfg.train.number_of_problems_per_batch
+        // cfg.train.per_device_train_batch_size
+        // accelerator.num_processes
+    )
+    if gradient_accumulation_steps < 1:
+        logger.warning(
+            "Computed gradient_accumulation_steps=%s; clamping to 1. "
+            "Increase number_of_problems_per_batch or num_samples_per_problem if you need a larger effective batch.",
+            gradient_accumulation_steps,
+        )
+        gradient_accumulation_steps = 1
+
     trainer = ClassroomGRPOTrainer(
         model=model_config.model_name_or_path,
         reward_funcs=[
@@ -127,10 +141,7 @@ def main(cfg: RLModelTrainingConfig):
             length_reward,
         ],
         args=ClassroomGRPOConfig(
-            gradient_accumulation_steps=cfg.train.num_samples_per_problem
-            * cfg.train.number_of_problems_per_batch
-            // cfg.train.per_device_train_batch_size
-            // accelerator.num_processes,
+            gradient_accumulation_steps=gradient_accumulation_steps,
             gradient_checkpointing=train_config.gradient_checkpointing,
             num_generations=cfg.train.num_samples_per_problem,
             per_device_train_batch_size=cfg.train.per_device_train_batch_size,
