@@ -60,8 +60,30 @@ def main(cfg: RLModelTrainingConfig):
 
     set_seed(cfg.seed)
 
+    world_size = int(
+        os.environ.get("WORLD_SIZE")
+        or os.environ.get("ACCELERATE_NUM_PROCESSES")
+        or 1
+    )
+    gradient_accumulation_steps = (
+        cfg.train.num_samples_per_problem
+        * cfg.train.number_of_problems_per_batch
+        // cfg.train.per_device_train_batch_size
+        // world_size
+    )
+    if gradient_accumulation_steps < 1:
+        logger.warning(
+            "Computed gradient_accumulation_steps=%s; clamping to 1. "
+            "Increase number_of_problems_per_batch or num_samples_per_problem if you need a larger effective batch.",
+            gradient_accumulation_steps,
+        )
+        gradient_accumulation_steps = 1
+
     kwargs = [InitProcessGroupKwargs(timeout=timedelta(hours=10))]
-    accelerator = Accelerator(kwargs_handlers=kwargs)
+    accelerator = Accelerator(
+        kwargs_handlers=kwargs,
+        gradient_accumulation_steps=gradient_accumulation_steps,
+    )
 
     if logging_config.wandb and accelerator.is_main_process:
         wandb.init(
@@ -118,19 +140,17 @@ def main(cfg: RLModelTrainingConfig):
     # Training
     #############################################################################
 
-    gradient_accumulation_steps = (
-        cfg.train.num_samples_per_problem
-        * cfg.train.number_of_problems_per_batch
-        // cfg.train.per_device_train_batch_size
-        // accelerator.num_processes
-    )
-    if gradient_accumulation_steps < 1:
-        logger.warning(
-            "Computed gradient_accumulation_steps=%s; clamping to 1. "
-            "Increase number_of_problems_per_batch or num_samples_per_problem if you need a larger effective batch.",
-            gradient_accumulation_steps,
+    if accelerator.state.deepspeed_plugin is not None:
+        plugin_cfg = accelerator.state.deepspeed_plugin.deepspeed_config
+        plugin_cfg["gradient_accumulation_steps"] = int(gradient_accumulation_steps)
+        plugin_cfg["train_micro_batch_size_per_gpu"] = int(
+            cfg.train.per_device_train_batch_size
         )
-        gradient_accumulation_steps = 1
+        plugin_cfg["train_batch_size"] = int(
+            cfg.train.per_device_train_batch_size
+            * gradient_accumulation_steps
+            * accelerator.num_processes
+        )
 
     trainer = ClassroomGRPOTrainer(
         model=model_config.model_name_or_path,
