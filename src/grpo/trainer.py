@@ -427,6 +427,24 @@ class ClassroomGRPOTrainer(Trainer):
         self.model.add_model_tags(self._tag_names)
 
         if self.ref_model is not None:
+            # TRL's prepare_deepspeed reads batch settings from the accelerator's runtime
+            # DeepSpeed plugin config rather than from our accelerate YAML file. On some
+            # environments those values remain 0/"auto", which makes DeepSpeed reject the
+            # reference model init with "Train batch size: 0". Fill them explicitly from
+            # the effective training arguments before preparing the reference model.
+            with contextlib.suppress(Exception):
+                plugin_cfg = self.accelerator.state.deepspeed_plugin.deepspeed_config
+                plugin_cfg["train_micro_batch_size_per_gpu"] = max(
+                    1, int(self.args.per_device_train_batch_size)
+                )
+                plugin_cfg["gradient_accumulation_steps"] = max(
+                    1, int(self.args.gradient_accumulation_steps)
+                )
+                plugin_cfg["train_batch_size"] = (
+                    plugin_cfg["train_micro_batch_size_per_gpu"]
+                    * plugin_cfg["gradient_accumulation_steps"]
+                    * max(1, int(self.accelerator.num_processes))
+                )
             self.ref_model = prepare_deepspeed(self.ref_model, self.accelerator)
 
     def _set_signature_columns_if_needed(self):
