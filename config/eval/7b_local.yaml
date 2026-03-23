@@ -50,7 +50,8 @@ generation:
   max_tokens_per_judge_attempt: 2048
   number_student_attempts: 8
   number_judge_attempts: 2
-  ignore_rejected_judge: false
+  ignore_rejected_judge: true
+  extra_penalty_for_rejected_judges: 0.5
 
 logging:
   wandb: false

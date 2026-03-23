@@ -74,7 +74,7 @@ logging:
 
 generation:
   extra_penalty_for_rejected_judges: 0.5
-  ignore_rejected_judge: false
+  ignore_rejected_judge: true
   use_experimental_shared_memory: false
   max_turns: 4
   max_tokens_in_conversation: 4096

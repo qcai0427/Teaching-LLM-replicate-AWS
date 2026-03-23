@@ -107,7 +107,7 @@ class GenerationConfig:
     number_student_attempts: int = 8
     # If any judge attempt is rejected we give a negative reward and no reward computation is performed.
     number_judge_attempts: int = 2
-    ignore_rejected_judge: bool = False  # We do not ignore rejected judge attempts.
+    ignore_rejected_judge: bool = True  # Soft lambda: subtract penalty instead of overriding reward.
     forced_conversation_type: Optional[str] = None  # 'guided' or 'attempt
     use_thinking: bool = False
     force_thinking: bool = False

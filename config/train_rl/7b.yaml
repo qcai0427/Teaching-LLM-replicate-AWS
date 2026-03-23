@@ -68,9 +68,9 @@ generation:
   # use_thinking: true
   # force_thinking: true
 
-  # This turns on the hard lambda.
+  # Soft lambda from the paper main sweep.
   extra_penalty_for_rejected_judges: 0.5 # This is the actual lambda we use.
-  ignore_rejected_judge: false # If we set this to false we get the soft lambda runs.
+  ignore_rejected_judge: true # true = soft lambda, false = hard lambda.
 
   use_experimental_shared_memory: false
   
