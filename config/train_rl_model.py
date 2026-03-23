@@ -113,7 +113,7 @@ class GenerationConfig:
     force_thinking: bool = False
 
     # Reward config
-    extra_penalty_for_rejected_judges: float = 0.25
+    extra_penalty_for_rejected_judges: float = 0.5
 
     # Server settings
     server_port: int = 8005

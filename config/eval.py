@@ -35,6 +35,7 @@ class EvalConfig:
     generation: GenerationConfig = field(
         default_factory=lambda: GenerationConfig(
             ignore_rejected_judge=True,
+            extra_penalty_for_rejected_judges=0.5,
             use_thinking=False,
             force_thinking=False,
             number_judge_attempts=2,

@@ -65,7 +65,7 @@ generation:
   number_student_attempts: 2
   number_judge_attempts: 1
   ignore_rejected_judge: true
-  extra_penalty_for_rejected_judges: 1.0
+  extra_penalty_for_rejected_judges: 0.5
   use_thinking: false
   force_thinking: false
   tokenizer_to_use: Qwen/Qwen2.5-7B-Instruct

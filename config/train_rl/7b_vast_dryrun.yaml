@@ -73,7 +73,7 @@ logging:
   save_steps: 1
 
 generation:
-  extra_penalty_for_rejected_judges: 1.0
+  extra_penalty_for_rejected_judges: 0.5
   ignore_rejected_judge: false
   use_experimental_shared_memory: false
   max_turns: 4
