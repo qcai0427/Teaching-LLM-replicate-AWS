@@ -51,11 +51,13 @@ python3 --version
 
 如果 `nvidia-smi` 不正常，先停，不要继续。
 
-## 4. clone 仓库
+## 4. clone 仓库到 Vast local volume
+
+下面这份手册默认你把数据都放在 `/workspace`。这是 Vast 上更稳的做法，因为你的 local volume 就挂在这里。
 
 ```bash
-mkdir -p ~/work
-cd ~/work
+mkdir -p /workspace/work
+cd /workspace/work
 git clone https://github.com/qcai0427/Teaching-LLM-replicate-AWS.git
 cd Teaching-LLM-replicate-AWS
 git log --oneline -n 3
@@ -72,12 +74,14 @@ echo 'export PATH=$HOME/miniconda3/bin:$PATH' >> ~/.bashrc
 source ~/.bashrc
 ```
 
-创建项目环境：
+创建项目环境到 `/workspace`：
 
 ```bash
-conda create -n pedagogy-vast python=3.11 -y
 source ~/miniconda3/etc/profile.d/conda.sh
-conda activate pedagogy-vast
+conda config --add envs_dirs /workspace/conda/envs
+conda config --add pkgs_dirs /workspace/conda/pkgs
+conda create -p /workspace/conda/envs/pedagogy-vast python=3.11 -y
+conda activate /workspace/conda/envs/pedagogy-vast
 python --version
 ```
 
@@ -86,7 +90,13 @@ python --version
 默认安装：
 
 ```bash
-cd ~/work/Teaching-LLM-replicate-AWS
+mkdir -p /workspace/.cache/huggingface /workspace/.cache/wandb /workspace/.cache/pip
+export HF_HOME=/workspace/.cache/huggingface
+export HUGGINGFACE_HUB_CACHE=/workspace/.cache/huggingface/hub
+export TRANSFORMERS_CACHE=/workspace/.cache/huggingface/transformers
+export WANDB_DIR=/workspace/.cache/wandb
+export PIP_CACHE_DIR=/workspace/.cache/pip
+cd /workspace/work/Teaching-LLM-replicate-AWS
 ./scripts/install_vast_env.sh
 ```
 
@@ -102,10 +112,17 @@ cd ~/work/Teaching-LLM-replicate-AWS
 ./scripts/install_vast_env.sh --with-ninja-upgrade
 ```
 
+如果你只想先把除 `flash-attn` 以外的环境装好：
+
+```bash
+./scripts/install_vast_env.sh --skip-flash-attn
+```
+
 ## 7. 安装后最小验证
 
 ```bash
 python -c "import torch; print(torch.__version__); print(torch.cuda.is_available()); print(torch.cuda.device_count())"
+python -c "import huggingface_hub, transformers, trl; print(huggingface_hub.__version__, transformers.__version__, trl.__version__)"
 python -c "import vllm; print(vllm.__version__)"
 python -c "import transformers, datasets, accelerate; print('python stack ok')"
 ```
@@ -114,7 +131,7 @@ python -c "import transformers, datasets, accelerate; print('python stack ok')"
 
 ```bash
 pip install -U "huggingface_hub[cli]"
-huggingface-cli login
+hf auth login
 ```
 
 如果你更习惯环境变量：
@@ -126,7 +143,7 @@ export HF_TOKEN=你的_hf_token
 检查是否登录成功：
 
 ```bash
-huggingface-cli whoami
+hf auth whoami
 ```
 
 ## 9. 登录 W&B
@@ -208,8 +225,8 @@ PY
 检查缓存和磁盘：
 
 ```bash
-du -sh ~/.cache/huggingface
-df -h
+du -sh /workspace/.cache/huggingface
+df -h /workspace
 ```
 
 ## 12. 单独验证模型能否加载
