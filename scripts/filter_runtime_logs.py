@@ -6,6 +6,8 @@ import sys
 
 ALWAYS_SHOW = [
     re.compile(r"\[start_rl_training\.sh\]"),
+    re.compile(r"\[run_vast_training\.sh\]"),
+    re.compile(r"\[run_vast_job\.sh\]"),
     re.compile(r"\[ETA\]"),
     re.compile(r"Training complete!"),
     re.compile(r"TrainOutput\("),
@@ -14,6 +16,8 @@ ALWAYS_SHOW = [
     re.compile(r"VLLM server is up"),
     re.compile(r"About to run:"),
     re.compile(r"Done\.$"),
+    re.compile(r"Upload log:"),
+    re.compile(r"completed successfully"),
 ]
 
 ERROR_PATTERNS = [

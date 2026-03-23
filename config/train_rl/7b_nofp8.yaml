@@ -5,6 +5,7 @@ train:
   learning_rate: 5e-7
   beta: 0.001
   mu: 2
+  save_policy_to_disk_every_n: 2
 
 teacher_model:
   model_name_or_path: Qwen/Qwen2.5-7B-Instruct
@@ -57,7 +58,7 @@ logging:
   run_group: 7b
   wandb_tags: ["7b", "nofp8"]
   save_dir: checkpoints/7b-nofp8
-  save_steps: 10
+  save_steps: 2
 
 generation:
   extra_penalty_for_rejected_judges: 1.0

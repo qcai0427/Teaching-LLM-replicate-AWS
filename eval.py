@@ -43,11 +43,26 @@ def cleanup_torch_distributed():
             torch.distributed.destroy_process_group()
 
 
+def default_report_path(run_name: str, suffix: str) -> str:
+    safe = "".join(c if c.isalnum() or c in {"-", "_"} else "-" for c in run_name)
+    safe = safe.strip("-_") or "eval"
+    return os.path.join("reports", f"{safe}_{suffix}.json")
+
+
 @hydra.main(config_path="config/eval", version_base=None)
 def main(cfg: EvalConfig):
     # Merge loaded config with defaults
     default_config = OmegaConf.structured(EvalConfig)
     cfg = OmegaConf.merge(default_config, cfg)
+
+    if not cfg.export_conversations_path:
+        cfg.export_conversations_path = default_report_path(
+            cfg.logging.wandb_run_name, "conversations"
+        )
+    if not cfg.export_metrics_path:
+        cfg.export_metrics_path = default_report_path(
+            cfg.logging.wandb_run_name, "metrics"
+        )
 
     # Initialize wandb logging if enabled in the config
     if hasattr(cfg, "logging") and cfg.logging.get("wandb", False):

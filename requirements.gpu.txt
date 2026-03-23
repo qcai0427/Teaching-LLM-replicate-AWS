@@ -1,0 +1,6 @@
+vllm==0.8.3
+deepspeed
+flash-attn==2.7.4.post1
+bitsandbytes
+liger-kernel==0.5.8
+llmcompressor

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-PID_FILE=".vllm_server.pid"
+PID_FILE="${VLLM_PID_FILE:-.runtime/vllm_server.pid}"
 
 if [[ -f "${PID_FILE}" ]]; then
   SERVER_PID="$(cat "${PID_FILE}")"
@@ -20,4 +20,4 @@ if [[ -f "${PID_FILE}" ]]; then
   rm -f "${PID_FILE}"
 fi
 
-pkill -f vllm_server.py || true
+pkill -f "python vllm_server.py" || true

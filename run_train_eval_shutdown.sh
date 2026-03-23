@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+echo "[run_train_eval_shutdown.sh] Deprecated: prefer ./run_vast_job.sh for interruptible Vast workflows." >&2
+
 usage() {
   cat <<'EOF'
 Usage:
