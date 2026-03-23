@@ -48,6 +48,21 @@ def _apply_runtime_deepspeed_batch_config(ds_config, micro_batch_size, grad_accu
         ds_config["train_batch_size"] = int(micro_batch_size * grad_accum * world_size)
 
 
+def _refresh_hf_deepspeed_config(hf_ds_config, args):
+    if hf_ds_config is None:
+        return
+    _apply_runtime_deepspeed_batch_config(
+        getattr(hf_ds_config, "config", None),
+        args.per_device_train_batch_size,
+        args.gradient_accumulation_steps,
+        args.world_size,
+    )
+    if hasattr(hf_ds_config, "mismatches"):
+        hf_ds_config.mismatches = []
+    if hasattr(hf_ds_config, "trainer_config_process"):
+        hf_ds_config.trainer_config_process(args)
+
+
 @hydra.main(config_path="config/train_rl", version_base=None)
 def main(cfg: RLModelTrainingConfig):
 
@@ -211,12 +226,7 @@ def main(cfg: RLModelTrainingConfig):
     )
 
     if getattr(trainer.args, "hf_deepspeed_config", None) is not None:
-        _apply_runtime_deepspeed_batch_config(
-            getattr(trainer.args.hf_deepspeed_config, "config", None),
-            cfg.train.per_device_train_batch_size,
-            gradient_accumulation_steps,
-            accelerator.num_processes,
-        )
+        _refresh_hf_deepspeed_config(trainer.args.hf_deepspeed_config, trainer.args)
 
     last_ckpt = None
     if os.path.isdir(cfg.logging.save_dir):
