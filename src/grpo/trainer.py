@@ -18,6 +18,7 @@
 # - Added `_compute_assistant_mask` function to mask user turns for loss computation.
 ##########################################################################################
 
+import contextlib
 
 import torch
 
