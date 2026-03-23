@@ -1,2 +1,5 @@
 #!/usr/bin/env bash
-python vllm_server.py "$@"
+set -euo pipefail
+
+PYTHON_BIN="${PYTHON_BIN:-python}"
+"${PYTHON_BIN}" vllm_server.py "$@"

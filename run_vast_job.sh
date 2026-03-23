@@ -134,7 +134,7 @@ done
   -- "${TRAIN_OVERRIDES[@]}"
 
 EVAL_CMD=(
-  python eval.py
+  "${PYTHON_BIN}" eval.py
   --config-name "${EVAL_CONFIG_NAME}"
   "teacher_model.model_name_or_path=${SAVE_DIR}/model"
   "export_conversations_path=${CONVERSATIONS_FILE}"

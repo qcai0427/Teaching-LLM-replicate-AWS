@@ -131,7 +131,7 @@ fi
 
 if [[ -n "${EVAL_CONFIG_NAME}" ]]; then
   echo "[run_train_eval_shutdown.sh] Eval log: ${EVAL_LOG}"
-  if ! run_with_filtered_console eval "${EVAL_LOG}" python eval.py --config-name "${EVAL_CONFIG_NAME}"; then
+  if ! run_with_filtered_console eval "${EVAL_LOG}" "${PYTHON_BIN}" eval.py --config-name "${EVAL_CONFIG_NAME}"; then
     status=$?
     echo "[run_train_eval_shutdown.sh] Eval failed. Full log: ${EVAL_LOG}" >&2
     maybe_shutdown "${status}"
