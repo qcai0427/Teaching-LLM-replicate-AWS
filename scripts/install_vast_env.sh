@@ -47,7 +47,9 @@ cd "${ROOT_DIR}"
 
 CPU_COUNT="$(getconf _NPROCESSORS_ONLN 2>/dev/null || nproc || echo 8)"
 FLASH_WHEEL_DIR="${PIP_WHEEL_DIR:-${ROOT_DIR}/.runtime/wheels}"
+BUILD_TMP_DIR="${TMPDIR:-${ROOT_DIR}/.runtime/tmp}"
 mkdir -p "${FLASH_WHEEL_DIR}"
+mkdir -p "${BUILD_TMP_DIR}"
 
 export MAX_JOBS="${MAX_JOBS:-${CPU_COUNT}}"
 export CMAKE_BUILD_PARALLEL_LEVEL="${CMAKE_BUILD_PARALLEL_LEVEL:-${CPU_COUNT}}"
@@ -57,6 +59,9 @@ export TORCH_CUDA_ARCH_LIST="${TORCH_CUDA_ARCH_LIST:-8.0}"
 export FLASH_ATTN_CUDA_ARCHS="${FLASH_ATTN_CUDA_ARCHS:-80}"
 export CUDA_HOME="${CUDA_HOME:-/usr/local/cuda}"
 export PIP_PREFER_BINARY=1
+export TMPDIR="${BUILD_TMP_DIR}"
+export TMP="${BUILD_TMP_DIR}"
+export TEMP="${BUILD_TMP_DIR}"
 
 python -m pip install -U pip setuptools wheel packaging
 if [[ "${WITH_NINJA_UPGRADE}" == "true" ]]; then
@@ -82,11 +87,12 @@ if [[ "${SKIP_FLASH_ATTN}" == "true" ]]; then
 else
   echo "[install_vast_env.sh] Building flash-attn wheel with MAX_JOBS=${MAX_JOBS}, NVCC_THREADS=${NVCC_THREADS}, arch=${FLASH_ATTN_CUDA_ARCHS}"
   python -m pip wheel \
+    --no-deps \
     --no-build-isolation \
     --wheel-dir "${FLASH_WHEEL_DIR}" \
     flash-attn==2.7.4.post1
   echo "[install_vast_env.sh] Installing flash-attn from ${FLASH_WHEEL_DIR}"
-  python -m pip install --no-index --find-links "${FLASH_WHEEL_DIR}" flash-attn==2.7.4.post1
+  python -m pip install --no-deps --no-index --find-links "${FLASH_WHEEL_DIR}" flash-attn==2.7.4.post1
 fi
 
 echo "[install_vast_env.sh] Installing base Python packages"
