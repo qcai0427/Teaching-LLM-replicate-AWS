@@ -45,7 +45,7 @@ generation:
   number_student_attempts: 8
 
 logging:
-  wandb: true
+  wandb: false
   wandb_project: eval
   wandb_run_name: 7b-paper-eval
   run_group: tutor

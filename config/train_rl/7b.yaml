@@ -5,7 +5,6 @@ train:
   learning_rate: 5e-7
   beta: 0.001
   mu: 2
-  save_policy_to_disk_every_n: 2
 
 teacher_model:
   model_name_or_path: Qwen/Qwen2.5-7B-Instruct
@@ -53,13 +52,13 @@ huggingface:
   push_to_hub: false
 
 logging:
-  wandb: true
+  wandb: false
   wandb_project: train-rl
   wandb_run_name: Qwen2.5-7B-Instruct-SoftLambda0.5
   run_group: 7b
   wandb_tags: ["7b"]
   save_dir: checkpoints/7b
-  save_steps: 2
+  save_steps: 10
 
 
 generation:
