@@ -2,6 +2,8 @@ from datetime import timedelta
 from accelerate import Accelerator, InitProcessGroupKwargs
 from transformers.trainer_utils import get_last_checkpoint
 import contextlib
+from pathlib import Path
+import threading
 import os
 import hydra
 import wandb
@@ -12,7 +14,9 @@ from config.train_rl_model import RLModelTrainingConfig
 from transformers import set_seed
 from dotenv import load_dotenv
 from transformers import AutoTokenizer
+from transformers import TrainerCallback
 from datasets import Dataset
+from huggingface_hub import HfApi
 from src.grpo.config import ClassroomGRPOConfig
 from src.grpo.trainer import ClassroomGRPOTrainer
 from src.utils.utils import (
@@ -61,6 +65,80 @@ def _refresh_hf_deepspeed_config(hf_ds_config, args):
         hf_ds_config.mismatches = []
     if hasattr(hf_ds_config, "trainer_config_process"):
         hf_ds_config.trainer_config_process(args)
+
+
+class HubCheckpointBackupCallback(TrainerCallback):
+    def __init__(
+        self,
+        repo_id: str,
+        repo_type: str = "model",
+        every_n_steps: int = 100,
+        private: bool = False,
+    ):
+        self.repo_id = repo_id
+        self.repo_type = repo_type
+        self.every_n_steps = max(1, int(every_n_steps))
+        self.private = private
+        self._api = HfApi()
+        self._active_upload = None
+        self._lock = threading.Lock()
+
+    def _upload_checkpoint(self, checkpoint_dir: str, step: int):
+        try:
+            self._api.create_repo(
+                repo_id=self.repo_id,
+                repo_type=self.repo_type,
+                private=self.private,
+                exist_ok=True,
+            )
+            self._api.upload_folder(
+                folder_path=checkpoint_dir,
+                repo_id=self.repo_id,
+                repo_type=self.repo_type,
+                path_in_repo=f"checkpoints/checkpoint-{step}",
+            )
+            logger.info(
+                "Uploaded checkpoint-%s to Hugging Face repo %s",
+                step,
+                self.repo_id,
+            )
+        except Exception:
+            logger.exception(
+                "Failed to upload checkpoint-%s to Hugging Face repo %s",
+                step,
+                self.repo_id,
+            )
+        finally:
+            with self._lock:
+                self._active_upload = None
+
+    def on_save(self, args, state, control, **kwargs):
+        step = int(getattr(state, "global_step", 0) or 0)
+        if step <= 0 or step % self.every_n_steps != 0:
+            return control
+        checkpoint_dir = Path(args.output_dir) / f"checkpoint-{step}"
+        if not checkpoint_dir.is_dir():
+            logger.warning("Checkpoint directory missing, skipping HF backup: %s", checkpoint_dir)
+            return control
+        with self._lock:
+            if self._active_upload is not None and self._active_upload.is_alive():
+                logger.warning(
+                    "Skipping HF backup for checkpoint-%s because a previous upload is still running",
+                    step,
+                )
+                return control
+            self._active_upload = threading.Thread(
+                target=self._upload_checkpoint,
+                args=(str(checkpoint_dir), step),
+                daemon=True,
+            )
+            self._active_upload.start()
+        logger.info(
+            "Started background upload for checkpoint-%s to Hugging Face repo %s",
+            step,
+            self.repo_id,
+        )
+        return control
 
 
 @hydra.main(config_path="config/train_rl", version_base=None)
@@ -224,6 +302,30 @@ def main(cfg: RLModelTrainingConfig):
         train_dataset=train_dataset,
         processing_class=tokenizer,
     )
+
+    hf_repo_id = (cfg.huggingface.name or "").strip()
+    if (
+        cfg.huggingface.backup_checkpoints_to_hub
+        and hf_repo_id
+        and "<" not in hf_repo_id
+    ):
+        trainer.add_callback(
+            HubCheckpointBackupCallback(
+                repo_id=hf_repo_id,
+                every_n_steps=cfg.huggingface.backup_every_n_steps,
+                private=cfg.huggingface.backup_private,
+            )
+        )
+        logger.info(
+            "Enabled Hugging Face checkpoint backups every %s steps to repo %s",
+            cfg.huggingface.backup_every_n_steps,
+            hf_repo_id,
+        )
+    elif cfg.huggingface.backup_checkpoints_to_hub:
+        logger.warning(
+            "Hugging Face checkpoint backups requested, but huggingface.name is not a valid repo id: %r",
+            cfg.huggingface.name,
+        )
 
     if getattr(trainer.args, "hf_deepspeed_config", None) is not None:
         _refresh_hf_deepspeed_config(trainer.args.hf_deepspeed_config, trainer.args)

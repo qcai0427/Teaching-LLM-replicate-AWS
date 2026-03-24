@@ -50,6 +50,9 @@ reward_model:
 huggingface:
   name: <huggingface_name>
   push_to_hub: false
+  backup_checkpoints_to_hub: true
+  backup_every_n_steps: 100
+  backup_private: false
 
 logging:
   wandb: false
