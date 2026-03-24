@@ -1098,7 +1098,10 @@ class Classroom:
         gc.collect()
         torch.cuda.empty_cache()
 
-        self.conversation_sets.append(conversations)
+        # The training/eval server only queries the most recent batch via
+        # to_pd_latest()/get_conversation_by_text(). Keeping all historical
+        # batches resident causes CPU RAM to grow throughout long runs.
+        self.conversation_sets = [conversations]
         return conversations
 
     def run_judges(self, conversations: List[Conversation]):
