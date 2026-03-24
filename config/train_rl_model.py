@@ -176,6 +176,9 @@ class TrainConfig:
 class HuggingFaceConfig:
     name: str = "<model_name>"
     push_to_hub: bool = False
+    backup_checkpoints_to_hub: bool = False
+    backup_every_n_steps: int = 100
+    backup_private: bool = False
 
 
 @dataclass
